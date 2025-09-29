@@ -1,158 +1,135 @@
-# Azure AI Agent Jupyter Notebook
+# Azure OpenAI Master Agent System with LangGraph
 
-A complete setup for building AI agents using Azure OpenAI and LangChain in Jupyter notebooks.
+A sophisticated multi-agent Python application that uses LangGraph and LangChain to manage specialized AI agents and data storage with Azure OpenAI services.
 
-## 🚀 Quick Start
+## Features
 
-### 1. Activate Virtual Environment
+- 🎯 **Master Agent Controller**: Intelligent task routing and agent coordination
+- 🤖 **Specialized Agents**: Chat, Analysis, and Grading agents with unique capabilities
+- 💾 **Data Management**: Persistent storage and context-aware interactions
+- 🔄 **LangGraph Workflows**: Structured multi-step agent processing
+- ⚙️ **Modular Architecture**: Clean separation of concerns and extensible design
+- 💬 **Interactive Interface**: Enhanced chat with system commands and status monitoring
+- 🛡️ **Comprehensive Error Handling**: Robust error management and logging
 
-```bash
-source .venv/bin/activate  # On macOS/Linux
-# or
-.venv\Scripts\activate     # On Windows
+## Project Structure
+
+```
+grading-agent/
+├── main.py              # Main application entry point
+├── master_agent.py      # Master agent controller with LangGraph workflow
+├── config.py            # Azure OpenAI configuration management
+├── data_manager.py      # Data storage and context management
+├── agents/              # Specialized agent modules
+│   ├── __init__.py      # Package initialization
+│   ├── chat_agent.py    # General conversation and assistance
+│   ├── analysis_agent.py # Data analysis and computational tasks
+│   └── grading_agent.py # Educational assessment and grading
+├── data/                # Data storage directory (created automatically)
+│   ├── interactions.jsonl # Interaction history
+│   └── context.json     # Persistent context data
+├── requirements.txt     # Python dependencies
+├── .env                # Environment variables (not in git)
+├── .env.template       # Environment template
+└── README.md           # This file
 ```
 
-### 2. Install Dependencies
+## Setup
 
-```bash
-pip install -r requirements.txt
-```
+1. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### 3. Configure Azure OpenAI
-
-1. Copy the environment template:
+2. **Configure environment variables:**
+   Copy `.env.template` to `.env` and fill in your Azure OpenAI details:
    ```bash
    cp .env.template .env
    ```
+   
+   Edit `.env` with your Azure OpenAI configuration:
+   ```
+   AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com/
+   AZURE_OPENAI_API_KEY=your-api-key-here
+   AZURE_OPENAI_API_VERSION=2024-02-15-preview
+   AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o
+   ```
 
-2. Edit `.env` with your Azure OpenAI credentials:
-   - `AZURE_OPENAI_ENDPOINT`: Your Azure OpenAI resource endpoint
-   - `AZURE_OPENAI_API_KEY`: Your API key
-   - `AZURE_OPENAI_CHAT_DEPLOYMENT`: Your GPT model deployment name
-   - `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`: Your embedding model deployment name (optional)
+3. **Run the application:**
+   ```bash
+   python main.py
+   ```
 
-### 4. Start Jupyter
+## Usage
 
-```bash
-jupyter lab
-# or
-jupyter notebook
-```
+The Master Agent System will:
+1. Initialize the master agent controller
+2. Load specialized agents (Chat, Analysis, Grading)
+3. Set up data management system
+4. Send a hello message to test the connection
+5. Start an interactive chat session with intelligent routing
 
-### 5. Open the Notebook
+### Interactive Commands
+- **Regular messages**: Automatically routed to appropriate specialized agents
+- **`status`**: Display system status and agent health
+- **`help`**: Show available commands
+- **`quit`/`exit`/`bye`**: Stop the application
 
-Open `azure_agent_notebook.ipynb` and run the cells to start building your AI agent!
+### Agent Routing
+The system automatically classifies your requests:
+- **Chat Agent**: General conversation, questions, explanations
+- **Analysis Agent**: Data analysis, computational tasks, research
+- **Grading Agent**: Educational assessment, feedback, rubric creation
 
-## 📋 What's Included
+## Components
 
-### Core Components
+### `master_agent.py`
+- **Master Agent Controller**: Orchestrates the entire system
+- **Task Classification**: Automatically determines the appropriate agent
+- **LangGraph Workflow**: Multi-step processing with error handling
+- **Agent Coordination**: Routes tasks and synthesizes responses
 
-- **Virtual Environment**: Python 3.13 environment in `.venv/`
-- **Jupyter Setup**: JupyterLab, notebook, and ipywidgets
-- **Azure AI Integration**: Azure OpenAI and Cognitive Services
-- **Agent Framework**: LangChain with LangGraph for advanced agents
-- **Interactive UI**: ipywidgets for chat interfaces
+### `agents/` Directory
+- **`chat_agent.py`**: Specialized for general conversation and assistance
+- **`analysis_agent.py`**: Optimized for data analysis and computational tasks
+- **`grading_agent.py`**: Focused on educational assessment and grading
 
-### Key Libraries
+### `data_manager.py`
+- **Persistent Storage**: Saves interaction history and context
+- **Context Retrieval**: Provides relevant historical context
+- **Data Analytics**: Tracks usage patterns and system performance
 
-#### AI & Agents
-- **LangChain**: The best framework for building AI agents in Python
-- **LangGraph**: For complex, stateful agent workflows
-- **Azure OpenAI**: Direct integration with Azure AI services
-- **OpenAI**: Fallback for direct OpenAI API usage
+### `config.py`
+- **Environment Management**: Loads and validates Azure OpenAI configuration
+- **Centralized Settings**: Provides configuration access across the system
 
-#### Data & Analysis
-- **pandas**: Data manipulation and analysis
-- **numpy**: Numerical computing
-- **matplotlib/seaborn**: Data visualization
-- **scikit-learn**: Machine learning utilities
+### `main.py`
+- **Application Entry Point**: Initializes and runs the master agent system
+- **Enhanced Interface**: Interactive chat with system commands and monitoring
 
-#### Utilities
-- **python-dotenv**: Environment variable management
-- **httpx/aiohttp**: Async HTTP clients
-- **rich**: Beautiful terminal output
-- **pydantic**: Data validation and settings
+## Requirements
 
-## 🤖 Why LangChain?
+- Python 3.8+
+- Azure OpenAI resource with deployed model
+- Valid API key and endpoint
 
-LangChain is recommended as the best agent framework because:
+## Advanced Features
 
-1. **Mature Ecosystem**: Extensive documentation and community support
-2. **Azure Integration**: Native Azure OpenAI support
-3. **Tool Integration**: Easy to add custom tools and external APIs
-4. **Memory Management**: Built-in conversation memory and context handling
-5. **Agent Types**: Multiple agent architectures (ReAct, OpenAI Functions, etc.)
-6. **Production Ready**: Used by thousands of production applications
+### Data Persistence
+- **Interaction History**: All conversations are stored in `data/interactions.jsonl`
+- **Context Awareness**: System provides relevant context from previous interactions
+- **Usage Analytics**: Track agent usage patterns and system performance
 
-## 🛠️ Agent Features
+### Extensibility
+- **Modular Design**: Easy to add new specialized agents
+- **Plugin Architecture**: Agents can be independently developed and tested
+- **Configuration Management**: Centralized settings for easy customization
 
-The notebook includes:
+## Error Handling
 
-- **Azure OpenAI Chat**: Direct integration with your Azure deployments
-- **Custom Tools**: Calculator, time, and web search tools
-- **Interactive Chat**: Widget-based chat interface
-- **Memory**: Conversation history management
-- **Error Handling**: Robust error handling and validation
-
-## 📁 Project Structure
-
-```
-.
-├── .venv/                          # Python virtual environment
-├── .env                           # Your Azure configuration (keep private!)
-├── .env.template                  # Template for environment variables
-├── requirements.txt               # Python dependencies
-├── azure_agent_notebook.ipynb    # Main Jupyter notebook
-└── README.md                      # This file
-```
-
-## 🔧 Configuration Options
-
-### Azure OpenAI Models
-
-Recommended deployments:
-- **Chat**: `gpt-4o`, `gpt-4`, or `gpt-35-turbo`
-- **Embeddings**: `text-embedding-ada-002` or `text-embedding-3-small`
-
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `AZURE_OPENAI_ENDPOINT` | Yes | Your Azure OpenAI resource endpoint |
-| `AZURE_OPENAI_API_KEY` | Yes | Your Azure OpenAI API key |
-| `AZURE_OPENAI_CHAT_DEPLOYMENT` | Yes | Name of your chat model deployment |
-| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | No | Name of your embedding model deployment |
-| `LANGCHAIN_TRACING_V2` | No | Enable LangSmith tracing |
-| `LANGCHAIN_API_KEY` | No | LangSmith API key for monitoring |
-
-## 🚨 Security Notes
-
-- Never commit your `.env` file to version control
-- Keep your API keys secure and rotate them regularly
-- Use Azure Key Vault for production deployments
-- Consider using managed identities in Azure environments
-
-## 🆘 Troubleshooting
-
-### Common Issues
-
-1. **Import Errors**: Make sure you've activated the virtual environment and installed requirements
-2. **Azure Connection Failed**: Check your endpoint URL and API key in `.env`
-3. **Model Not Found**: Verify your deployment names match what's configured in Azure
-4. **Rate Limits**: Azure OpenAI has rate limits; consider implementing retry logic
-
-### Getting Help
-
-- Check the [LangChain documentation](https://python.langchain.com/)
-- Review [Azure OpenAI documentation](https://docs.microsoft.com/en-us/azure/cognitive-services/openai/)
-- Open an issue if you encounter problems with this setup
-
-## 🎯 Next Steps
-
-1. **Customize Tools**: Add your own custom tools for specific tasks
-2. **Add Memory**: Implement persistent conversation memory
-3. **Create Workflows**: Use LangGraph for complex multi-step processes
-4. **Deploy**: Move to production with Azure Container Apps or Functions
-5. **Monitor**: Set up LangSmith for agent performance monitoring
-
-Happy coding! 🎉
+The system includes comprehensive error handling for:
+- **Configuration Issues**: Missing or invalid Azure OpenAI settings
+- **API Errors**: Azure OpenAI service connectivity and rate limiting
+- **Agent Failures**: Graceful fallback when specialized agents encounter errors
+- **Data Management**: Robust storage and retrieval error handling
+- **Network Issues**: Automatic retry and error reporting
