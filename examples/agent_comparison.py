@@ -7,9 +7,9 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agents.chat_agent import ChatAgent
-from agents.analysis_agent import AnalysisAgent
-from agents.grading_agent import GradingAgent
+from modules.agents.chat_agent import ChatAgent
+from modules.agents.analysis_agent import AnalysisAgent
+from modules.agents.grading_agent import GradingAgent
 import time
 
 def main():

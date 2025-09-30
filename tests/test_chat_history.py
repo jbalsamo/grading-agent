@@ -1,19 +1,17 @@
-#!/usr/bin/env python3
 """
 Test script for conversation history functionality.
 """
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from master_agent import MasterAgent
-from conversation_history import ConversationHistory
+from modules.master_agent import MasterAgent
+from modules.conversation_history import ConversationHistory
 import time
 
 def test_conversation_history():
     """Test the conversation history functionality."""
     print("🧪 Testing Conversation History Functionality")
-    print("=" * 50)
     
     try:
         # Initialize the master agent

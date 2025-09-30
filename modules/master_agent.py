@@ -4,9 +4,9 @@ Master Agent Controller for managing multiple specialized agents and data manage
 from typing import Dict, Any, TypedDict, List, Optional
 from langchain_openai import AzureChatOpenAI
 from langgraph.graph import StateGraph, END
-from config import config
-from utils import SystemMonitor
-from conversation_history import ConversationHistory
+from .config import config
+from .utils import SystemMonitor
+from .conversation_history import ConversationHistory
 import logging
 import json
 import time
@@ -39,6 +39,9 @@ class MasterAgent:
         self.monitor = SystemMonitor()
         self.conversation_history = ConversationHistory(max_messages=20)
         self._initialize_agents()
+        
+        # Load previous conversation history if available
+        self._load_conversation_history()
     
     def _create_llm(self) -> AzureChatOpenAI:
         """Create Azure OpenAI LLM instance."""
@@ -57,10 +60,10 @@ class MasterAgent:
         """Initialize specialized agents."""
         try:
             # Import and initialize specialized agents
-            from agents.chat_agent import ChatAgent
-            from agents.analysis_agent import AnalysisAgent
-            from agents.grading_agent import GradingAgent
-            from data_manager import DataManager
+            from .agents.chat_agent import ChatAgent
+            from .agents.analysis_agent import AnalysisAgent
+            from .agents.grading_agent import GradingAgent
+            from .data_manager import DataManager
             
             self.specialized_agents = {
                 "chat": ChatAgent(),
@@ -390,7 +393,7 @@ class MasterAgent:
     
     def run_health_check(self) -> Dict[str, Any]:
         """Run a comprehensive health check."""
-        from utils import SystemHealthChecker
+        from .utils import SystemHealthChecker
         health_checker = SystemHealthChecker(self)
         return health_checker.run_health_check()
     
@@ -417,3 +420,46 @@ class MasterAgent:
             logger.info(f"Conversation history limit set to {max_messages}")
         else:
             logger.warning("Invalid conversation history limit. Must be greater than 0.")
+    
+    def _load_conversation_history(self) -> None:
+        """Load conversation history from disk on startup."""
+        try:
+            if self.conversation_history.load_from_disk():
+                loaded_count = len(self.conversation_history)
+                if loaded_count > 0:
+                    logger.info(f"Restored previous conversation with {loaded_count} messages")
+                    print(f"💾 Restored previous conversation with {loaded_count} messages")
+            else:
+                logger.info("Starting with fresh conversation history")
+        except Exception as e:
+            logger.warning(f"Could not load conversation history: {e}")
+            print(f"⚠️  Could not restore previous conversation, starting fresh")
+    
+    def save_conversation_history(self) -> bool:
+        """Save current conversation history to disk.
+        
+        Returns:
+            True if save was successful, False otherwise
+        """
+        try:
+            success = self.conversation_history.save_to_disk()
+            if success:
+                logger.info("Conversation history saved successfully")
+            return success
+        except Exception as e:
+            logger.error(f"Error saving conversation history: {e}")
+            return False
+    
+    def shutdown(self) -> None:
+        """Perform cleanup operations before shutdown."""
+        logger.info("Shutting down Master Agent...")
+        
+        # Save conversation history
+        if len(self.conversation_history) > 0:
+            print("💾 Saving conversation history...")
+            if self.save_conversation_history():
+                print(f"✅ Saved {len(self.conversation_history)} messages for next session")
+            else:
+                print("⚠️  Could not save conversation history")
+        
+        logger.info("Master Agent shutdown complete")

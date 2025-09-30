@@ -4,11 +4,11 @@ Chat Agent - Specialized for general conversation and assistance.
 from typing import Dict, Any, TYPE_CHECKING
 from langchain_openai import AzureChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from config import config
+from ..config import config
 import logging
 
 if TYPE_CHECKING:
-    from conversation_history import ConversationHistory
+    from ..conversation_history import ConversationHistory
 
 logger = logging.getLogger(__name__)
 

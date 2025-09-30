@@ -4,9 +4,9 @@ Test script for the main application functionality without interactive input.
 """
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from master_agent import MasterAgent
+from modules.master_agent import MasterAgent
 
 def test_main_app_functionality():
     """Test the main application functionality programmatically."""

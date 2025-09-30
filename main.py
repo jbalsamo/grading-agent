@@ -2,18 +2,65 @@
 Main application entry point for the Azure OpenAI Master Agent System.
 """
 import logging
-from master_agent import MasterAgent
-from config import config
+import argparse
+from modules.master_agent import MasterAgent
+from modules.config import config
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
+
+def setup_logging(verbose: bool = False):
+    """Set up logging configuration based on verbose flag.
+    
+    Args:
+        verbose: If True, show INFO level logs. If False, show WARNING and above only.
+    """
+    log_level = logging.INFO if verbose else logging.WARNING
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        force=True  # Force reconfiguration if already configured
+    )
+    if verbose:
+        print("📝 Verbose logging enabled (INFO level)")
+    else:
+        print("🔇 Quiet mode (WARNING level and above)")
+
+def parse_arguments():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description='Azure OpenAI Master Agent System - Multi-agent chat application with conversation history',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s              # Run in quiet mode
+  %(prog)s -v           # Run with verbose logging
+  %(prog)s --verbose    # Run with verbose logging (long form)
+
+Available commands during chat:
+  status         - Show system status
+  stats          - Show performance statistics
+  health         - Run health check
+  history        - Show conversation history stats
+  clear-history  - Clear conversation history
+  help           - Show help message
+  quit/exit/bye  - Exit the system
+        """
+    )
+    parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Enable verbose logging (show INFO level logs)'
+    )
+    return parser.parse_args()
 
 def main():
     """Main function to run the Azure OpenAI Master Agent System."""
+    # Parse command-line arguments
+    args = parse_arguments()
+    
+    # Set up logging based on verbose flag
+    setup_logging(verbose=args.verbose)
+    
     print("🚀 Starting Azure OpenAI Master Agent System...")
     print("=" * 60)
     
@@ -58,6 +105,7 @@ def main():
                 user_input = input("\n👤 You: ").strip()
                 
                 if user_input.lower() in ['quit', 'exit', 'bye']:
+                    agent.shutdown()
                     print("👋 Goodbye! Thanks for using the Master Agent System!")
                     break
                 
@@ -79,8 +127,9 @@ def main():
                     print("   • health - Run health check")
                     print("   • history - Show conversation history stats")
                     print("   • clear-history - Clear conversation history")
+                    print("   • save - Manually save conversation history")
                     print("   • help - Show this help message")
-                    print("   • quit/exit/bye - Exit the system")
+                    print("   • quit/exit/bye - Exit the system (auto-saves)")
                     print("   • Any other input - Chat with the system")
                     continue
                 
@@ -127,7 +176,17 @@ def main():
                 
                 if user_input.lower() == 'clear-history':
                     agent.clear_conversation_history()
+                    # Also delete the saved file
+                    agent.conversation_history.delete_saved_history()
                     print("🗑️  Conversation history cleared!")
+                    continue
+                
+                if user_input.lower() == 'save':
+                    print("💾 Saving conversation history...")
+                    if agent.save_conversation_history():
+                        print(f"✅ Saved {len(agent.conversation_history)} messages to disk")
+                    else:
+                        print("⚠️  Failed to save conversation history")
                     continue
                 
                 if not user_input:
@@ -139,7 +198,9 @@ def main():
                 print(f"🤖 Master Assistant: {response}")
                 
             except KeyboardInterrupt:
-                print("\n\n👋 Goodbye! Thanks for using the Master Agent System!")
+                print("\n")
+                agent.shutdown()
+                print("\n👋 Goodbye! Thanks for using the Master Agent System!")
                 break
             except Exception as e:
                 print(f"❌ Error during chat: {e}")

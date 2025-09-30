@@ -2,9 +2,11 @@
 Conversation History Manager - Manages shared chat history across agents.
 """
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime
 import logging
+import json
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -20,15 +22,21 @@ class ChatMessage:
 class ConversationHistory:
     """Manages conversation history with a rolling window of messages."""
     
-    def __init__(self, max_messages: int = 20):
+    def __init__(self, max_messages: int = 20, storage_file: str = "data/conversation_history.json"):
         """Initialize conversation history manager.
         
         Args:
             max_messages: Maximum number of messages to keep in history
+            storage_file: Path to file for persisting conversation history
         """
         self.max_messages = max_messages
+        self.storage_file = storage_file
         self.messages: List[ChatMessage] = []
-        logger.info(f"ConversationHistory initialized with max_messages={max_messages}")
+        
+        # Ensure data directory exists
+        os.makedirs(os.path.dirname(storage_file), exist_ok=True)
+        
+        logger.info(f"ConversationHistory initialized with max_messages={max_messages}, storage_file={storage_file}")
     
     def add_user_message(self, content: str) -> None:
         """Add a user message to the conversation history."""
@@ -199,3 +207,98 @@ class ConversationHistory:
     def __str__(self) -> str:
         """String representation of the conversation history."""
         return f"ConversationHistory({len(self.messages)} messages, max={self.max_messages})"
+    
+    def save_to_disk(self) -> bool:
+        """Save conversation history to disk.
+        
+        Returns:
+            True if save was successful, False otherwise
+        """
+        try:
+            # Convert messages to serializable format
+            serializable_messages = []
+            for message in self.messages:
+                msg_dict = {
+                    "role": message.role,
+                    "content": message.content,
+                    "timestamp": message.timestamp.isoformat(),
+                    "agent_type": message.agent_type,
+                    "metadata": message.metadata
+                }
+                serializable_messages.append(msg_dict)
+            
+            # Save to file
+            data = {
+                "max_messages": self.max_messages,
+                "saved_at": datetime.now().isoformat(),
+                "messages": serializable_messages
+            }
+            
+            with open(self.storage_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            
+            logger.info(f"Saved {len(self.messages)} messages to {self.storage_file}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error saving conversation history: {e}")
+            return False
+    
+    def load_from_disk(self) -> bool:
+        """Load conversation history from disk.
+        
+        Returns:
+            True if load was successful, False otherwise
+        """
+        try:
+            if not os.path.exists(self.storage_file):
+                logger.info(f"No conversation history file found at {self.storage_file}")
+                return False
+            
+            with open(self.storage_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # Clear current messages
+            self.messages.clear()
+            
+            # Restore messages
+            for msg_dict in data.get("messages", []):
+                message = ChatMessage(
+                    role=msg_dict["role"],
+                    content=msg_dict["content"],
+                    timestamp=datetime.fromisoformat(msg_dict["timestamp"]),
+                    agent_type=msg_dict.get("agent_type"),
+                    metadata=msg_dict.get("metadata")
+                )
+                self.messages.append(message)
+            
+            # Update max_messages if it changed
+            if "max_messages" in data:
+                self.max_messages = data["max_messages"]
+            
+            logger.info(f"Loaded {len(self.messages)} messages from {self.storage_file}")
+            logger.info(f"Last saved at: {data.get('saved_at', 'unknown')}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error loading conversation history: {e}")
+            return False
+    
+    def delete_saved_history(self) -> bool:
+        """Delete the saved conversation history file.
+        
+        Returns:
+            True if deletion was successful, False otherwise
+        """
+        try:
+            if os.path.exists(self.storage_file):
+                os.remove(self.storage_file)
+                logger.info(f"Deleted conversation history file: {self.storage_file}")
+                return True
+            else:
+                logger.info(f"No conversation history file to delete at {self.storage_file}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error deleting conversation history file: {e}")
+            return False

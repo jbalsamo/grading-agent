@@ -1,4 +1,6 @@
-# Azure OpenAI Master Agent System with LangGraph
+# Azure OpenAI Master Agent System
+
+> A modular, multi-agent system with conversation history persistence and specialized AI agents with LangGraph
 
 A sophisticated multi-agent Python application that uses LangGraph and LangChain to manage specialized AI agents and data storage with Azure OpenAI services.
 
@@ -16,23 +18,43 @@ A sophisticated multi-agent Python application that uses LangGraph and LangChain
 
 ```
 grading-agent/
-├── main.py              # Main application entry point
-├── master_agent.py      # Master agent controller with LangGraph workflow
-├── config.py            # Azure OpenAI configuration management
-├── data_manager.py      # Data storage and context management
-├── agents/              # Specialized agent modules
-│   ├── __init__.py      # Package initialization
-│   ├── chat_agent.py    # General conversation and assistance
-│   ├── analysis_agent.py # Data analysis and computational tasks
-│   └── grading_agent.py # Educational assessment and grading
-├── data/                # Data storage directory (created automatically)
-│   ├── interactions.jsonl # Interaction history
-│   └── context.json     # Persistent context data
-├── requirements.txt     # Python dependencies
-├── .env                # Environment variables (not in git)
-├── .env.template       # Environment template
-└── README.md           # This file
+├── main.py                 # Application entry point
+├── README.md              # Project overview
+├── requirements.txt       # Python dependencies
+├── .env                   # Configuration (not in git)
+│
+├── modules/              # Core application modules
+│   ├── master_agent.py   # Master agent orchestrator
+│   ├── conversation_history.py  # Chat history with persistence
+│   ├── data_manager.py   # Data storage and retrieval
+│   ├── config.py         # Configuration management
+│   ├── utils.py          # Utilities and monitoring
+│   └── agents/           # Specialized agents
+│       ├── chat_agent.py      # General conversation
+│       ├── analysis_agent.py  # Data analysis
+│       └── grading_agent.py   # Educational grading
+│
+├── tests/                # Test suite
+│   ├── test_chat_history.py
+│   ├── test_persistence.py
+│   └── test_verbose_mode.py
+│
+├── docs/                 # Documentation
+│   ├── USAGE.md
+│   ├── PERSISTENCE_GUIDE.md
+│   ├── PROJECT_STRUCTURE.md
+│   └── CHANGELOG.md
+│
+├── examples/             # Example scripts
+│   ├── agent_comparison.py
+│   └── batch_processing.py
+│
+└── data/                 # Runtime data
+    ├── interactions.jsonl
+    └── conversation_history.json
 ```
+
+📖 **See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for detailed structure documentation**
 
 ## Setup
 
