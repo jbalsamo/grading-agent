@@ -77,6 +77,8 @@ def main():
                     print("   • status - Show system status")
                     print("   • stats - Show performance statistics")
                     print("   • health - Run health check")
+                    print("   • history - Show conversation history stats")
+                    print("   • clear-history - Clear conversation history")
                     print("   • help - Show this help message")
                     print("   • quit/exit/bye - Exit the system")
                     print("   • Any other input - Chat with the system")
@@ -104,6 +106,28 @@ def main():
                     for check_name, check_result in health['checks'].items():
                         status_emoji = "✅" if check_result['status'] == 'pass' else "⚠️" if check_result['status'] == 'warning' else "❌"
                         print(f"   {status_emoji} {check_name.replace('_', ' ').title()}: {check_result['status']}")
+                    continue
+                
+                if user_input.lower() == 'history':
+                    history_info = agent.get_conversation_history()
+                    print("\n💬 Conversation History:")
+                    stats = history_info['stats']
+                    print(f"   Total Messages: {stats['total_messages']}")
+                    print(f"   User Messages: {stats['user_messages']}")
+                    print(f"   Assistant Messages: {stats['assistant_messages']}")
+                    if stats['agent_usage']:
+                        print("   Agent Usage:")
+                        for agent_name, count in stats['agent_usage'].items():
+                            print(f"     - {agent_name}: {count} responses")
+                    if stats['total_messages'] > 0:
+                        print(f"\n📝 Recent Context (last 5 messages):")
+                        recent_context = agent.conversation_history.get_recent_context(5)
+                        print(recent_context)
+                    continue
+                
+                if user_input.lower() == 'clear-history':
+                    agent.clear_conversation_history()
+                    print("🗑️  Conversation history cleared!")
                     continue
                 
                 if not user_input:

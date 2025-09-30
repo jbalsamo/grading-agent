@@ -6,6 +6,7 @@ from langchain_openai import AzureChatOpenAI
 from langgraph.graph import StateGraph, END
 from config import config
 from utils import SystemMonitor
+from conversation_history import ConversationHistory
 import logging
 import json
 import time
@@ -24,6 +25,7 @@ class MasterAgentState(TypedDict):
     task_classification: str
     agent_responses: dict
     data_context: dict
+    conversation_history: list
 
 class MasterAgent:
     """Master Agent Controller for managing specialized agents and data."""
@@ -35,6 +37,7 @@ class MasterAgent:
         self.specialized_agents = {}
         self.data_manager = None
         self.monitor = SystemMonitor()
+        self.conversation_history = ConversationHistory(max_messages=20)
         self._initialize_agents()
     
     def _create_llm(self) -> AzureChatOpenAI:
@@ -176,26 +179,36 @@ class MasterAgent:
             user_input = state.get("user_input", "")
             
             if agent_type in self.specialized_agents:
-                # Use specialized agent
+                # Use specialized agent with conversation history
                 specialized_agent = self.specialized_agents[agent_type]
-                response = specialized_agent.process(user_input)
+                
+                # Check if agent supports conversation history
+                if hasattr(specialized_agent, 'process_with_history'):
+                    response = specialized_agent.process_with_history(user_input, self.conversation_history)
+                else:
+                    # Fallback to original method for backward compatibility
+                    response = specialized_agent.process(user_input)
+                
                 state["agent_responses"] = {agent_type: response}
                 logger.info(f"Task routed to {agent_type} agent")
             else:
-                # Fallback to master agent direct processing
-                messages = state.get("messages", [])
+                # Fallback to master agent direct processing with history
+                # Get conversation history for context
+                history_messages = self.conversation_history.get_langchain_messages()
+                
+                # Add current user message
                 from langchain_core.messages import HumanMessage, SystemMessage
+                current_messages = [
+                    SystemMessage(content=f"You are handling a {agent_type} task."),
+                    HumanMessage(content=user_input)
+                ]
                 
-                langchain_messages = []
-                for msg in messages:
-                    if msg["role"] == "system":
-                        langchain_messages.append(SystemMessage(content=msg["content"]))
-                    elif msg["role"] == "user":
-                        langchain_messages.append(HumanMessage(content=msg["content"]))
+                # Combine history with current message
+                all_messages = history_messages + current_messages
                 
-                response = self.llm.invoke(langchain_messages)
+                response = self.llm.invoke(all_messages)
                 state["agent_responses"] = {"master": response.content}
-                logger.info("Task handled by master agent directly")
+                logger.info("Task handled by master agent directly with conversation history")
             
             return state
             
@@ -297,6 +310,9 @@ class MasterAgent:
         agent_type = "unknown"
         
         try:
+            # Add user message to conversation history
+            self.conversation_history.add_user_message(user_input)
+            
             # Initialize state
             initial_state = {
                 "messages": [],
@@ -306,7 +322,8 @@ class MasterAgent:
                 "agent_type": "",
                 "task_classification": "",
                 "agent_responses": {},
-                "data_context": {}
+                "data_context": {},
+                "conversation_history": self.conversation_history.get_messages_for_llm()
             }
             
             # Run the graph
@@ -314,6 +331,9 @@ class MasterAgent:
             agent_type = result.get("task_classification", "unknown")
             
             response = result.get("response", "No response generated")
+            
+            # Add assistant response to conversation history
+            self.conversation_history.add_assistant_message(response, agent_type)
             
             # Log successful request
             response_time = time.time() - start_time
@@ -326,8 +346,12 @@ class MasterAgent:
             response_time = time.time() - start_time
             self.monitor.log_request(agent_type, response_time, success=False)
             
+            error_response = f"I apologize, but I encountered an error: {str(e)}"
+            # Still add the error response to history for context
+            self.conversation_history.add_assistant_message(error_response, "error")
+            
             logger.error(f"Error in chat method: {e}")
-            return f"I apologize, but I encountered an error: {str(e)}"
+            return error_response
     
     def get_info(self) -> Dict[str, Any]:
         """Get information about the master agent configuration."""
@@ -369,3 +393,27 @@ class MasterAgent:
         from utils import SystemHealthChecker
         health_checker = SystemHealthChecker(self)
         return health_checker.run_health_check()
+    
+    def get_conversation_history(self) -> Dict[str, Any]:
+        """Get conversation history statistics and recent messages."""
+        return {
+            "stats": self.conversation_history.get_stats(),
+            "recent_context": self.conversation_history.get_recent_context(10),
+            "total_messages": len(self.conversation_history)
+        }
+    
+    def clear_conversation_history(self) -> None:
+        """Clear the conversation history."""
+        self.conversation_history.clear_history()
+        logger.info("Conversation history cleared by user request")
+    
+    def set_conversation_history_limit(self, max_messages: int) -> None:
+        """Set the maximum number of messages to keep in conversation history."""
+        if max_messages > 0:
+            self.conversation_history.max_messages = max_messages
+            # Trim if necessary
+            if len(self.conversation_history.messages) > max_messages:
+                self.conversation_history.messages = self.conversation_history.messages[-max_messages:]
+            logger.info(f"Conversation history limit set to {max_messages}")
+        else:
+            logger.warning("Invalid conversation history limit. Must be greater than 0.")
