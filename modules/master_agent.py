@@ -144,6 +144,7 @@ class MasterAgent:
             - chat: General conversation, questions, or assistance
             - analysis: Data analysis, file processing, or computational tasks
             - grading: Educational assessment, grading, or evaluation tasks
+            - code_review: Code review, refactoring, or code quality analysis
             
             User request: "{user_input}"
             
@@ -165,8 +166,8 @@ class MasterAgent:
             response = self.llm.invoke(langchain_messages)
             task_type = response.content.strip().lower()
             
-            # Validate classification
-            valid_types = ["chat", "analysis", "grading"]
+            # Updated valid types
+            valid_types = ["chat", "analysis", "grading", "code_review"]
             if task_type not in valid_types:
                 task_type = "chat"  # Default fallback
             

@@ -1,0 +1,16 @@
+{
+  "uptime_seconds": 637.89,
+  "total_requests": 6,
+  "total_errors": 0,
+  "overall_error_rate": 0.0,
+  "agents": {
+    "chat": {
+      "request_count": 6,
+      "average_duration": 54.325,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "last_called": "2025-10-01T09:59:41.015346"
+    }
+  },
+  "timestamp": "2025-10-01T09:59:50.012484"
+}
