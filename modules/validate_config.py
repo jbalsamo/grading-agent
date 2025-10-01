@@ -6,7 +6,7 @@ Run this script to validate your configuration before starting the system.
 import os
 import sys
 from dotenv import load_dotenv
-from utils import ConfigValidator, get_system_info
+from modules.utils import ConfigValidator, get_system_info
 
 def main():
     """Main validation function."""

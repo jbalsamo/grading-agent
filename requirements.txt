@@ -4,6 +4,7 @@ langgraph==0.2.28
 python-dotenv==1.0.1
 pydantic==2.9.2
 typing-extensions==4.12.2
+psutil==5.9.8
 
 # Testing
 pytest==8.0.0

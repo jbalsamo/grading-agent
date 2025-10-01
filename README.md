@@ -6,13 +6,16 @@ A sophisticated multi-agent Python application that uses LangGraph and LangChain
 
 ## Features
 
-- 🎯 **Master Agent Controller**: Intelligent task routing and agent coordination
+- 🎯 **Master Agent Controller**: Intelligent task routing and agent coordination using LangGraph
 - 🤖 **Specialized Agents**: Chat, Analysis, and Grading agents with unique capabilities
-- 💾 **Data Management**: Persistent storage and context-aware interactions
-- 🔄 **LangGraph Workflows**: Structured multi-step agent processing
+- 💬 **Conversation History**: Shared 20-message rolling window across all agents with persistence
+- 💾 **Data Management**: Persistent storage of interactions in JSONL format
+- 🔄 **LangGraph Workflows**: Structured multi-step agent processing with conditional routing
 - ⚙️ **Modular Architecture**: Clean separation of concerns and extensible design
-- 💬 **Interactive Interface**: Enhanced chat with system commands and status monitoring
+- 📊 **System Monitoring**: Performance tracking, health checks, and usage statistics
+- 💻 **Interactive CLI**: Enhanced chat with system commands, verbose mode, and status monitoring
 - 🛡️ **Comprehensive Error Handling**: Robust error management and logging
+- 🔁 **Session Persistence**: Conversation history automatically saves and restores between sessions
 
 ## Project Structure
 
@@ -21,37 +24,54 @@ grading-agent/
 ├── main.py                 # Application entry point
 ├── README.md              # Project overview
 ├── requirements.txt       # Python dependencies
+├── pytest.ini             # Pytest configuration
 ├── .env                   # Configuration (not in git)
+├── .env.template          # Environment template
+├── .gitignore            # Git ignore rules
 │
 ├── modules/              # Core application modules
+│   ├── __init__.py       # Module initialization
 │   ├── master_agent.py   # Master agent orchestrator
 │   ├── conversation_history.py  # Chat history with persistence
 │   ├── data_manager.py   # Data storage and retrieval
 │   ├── config.py         # Configuration management
+│   ├── validate_config.py # Configuration validation
 │   ├── utils.py          # Utilities and monitoring
 │   └── agents/           # Specialized agents
+│       ├── __init__.py        # Agents module init
 │       ├── chat_agent.py      # General conversation
 │       ├── analysis_agent.py  # Data analysis
 │       └── grading_agent.py   # Educational grading
 │
 ├── tests/                # Test suite
+│   ├── README.md              # Testing documentation
+│   ├── conftest.py           # Pytest fixtures
 │   ├── test_chat_history.py
+│   ├── test_config.py
+│   ├── test_conversation_history.py
+│   ├── test_integration.py
+│   ├── test_main_app.py
 │   ├── test_persistence.py
+│   ├── test_utils.py
 │   └── test_verbose_mode.py
 │
 ├── docs/                 # Documentation
 │   ├── USAGE.md
 │   ├── PERSISTENCE_GUIDE.md
 │   ├── PROJECT_STRUCTURE.md
+│   ├── SYSTEM_OVERVIEW.md
+│   ├── TESTING_SUMMARY.md
+│   ├── DEPLOYMENT_SUMMARY.md
+│   ├── REORGANIZATION_SUMMARY.md
 │   └── CHANGELOG.md
 │
 ├── examples/             # Example scripts
+│   ├── README.md
 │   ├── agent_comparison.py
 │   └── batch_processing.py
 │
 └── data/                 # Runtime data
-    ├── interactions.jsonl
-    └── conversation_history.json
+    └── interactions.jsonl
 ```
 
 📖 **See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for detailed structure documentation**
@@ -69,33 +89,55 @@ grading-agent/
    cp .env.template .env
    ```
    
-   Edit `.env` with your Azure OpenAI configuration:
+   Required configuration in `.env`:
    ```
    AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com/
    AZURE_OPENAI_API_KEY=your-api-key-here
    AZURE_OPENAI_API_VERSION=2024-02-15-preview
    AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o
    ```
+   
+   Optional configuration:
+   ```
+   AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-ada-002
+   AZURE_COGNITIVE_SERVICES_KEY=your-cognitive-services-key
+   AZURE_COGNITIVE_SERVICES_REGION=your-region
+   LANGCHAIN_TRACING_V2=true
+   LANGCHAIN_API_KEY=your-langsmith-api-key
+   LANGCHAIN_PROJECT=azure-agent-notebook
+   ```
 
 3. **Run the application:**
    ```bash
+   # Run in quiet mode (WARNING level and above)
    python main.py
+   
+   # Run with verbose logging (INFO level)
+   python main.py -v
+   python main.py --verbose
    ```
 
 ## Usage
 
 The Master Agent System will:
-1. Initialize the master agent controller
+1. Initialize the master agent controller with Azure OpenAI
 2. Load specialized agents (Chat, Analysis, Grading)
-3. Set up data management system
-4. Send a hello message to test the connection
-5. Start an interactive chat session with intelligent routing
+3. Set up data management system and conversation history
+4. Restore previous conversation history from disk (if available)
+5. Send a hello message to test the connection
+6. Start an interactive chat session with intelligent routing
+7. Auto-save conversation history on exit
 
 ### Interactive Commands
 - **Regular messages**: Automatically routed to appropriate specialized agents
 - **`status`**: Display system status and agent health
+- **`stats`**: Show performance statistics (uptime, response time, agent usage)
+- **`health`**: Run comprehensive health check
+- **`history`**: View conversation history statistics and recent messages
+- **`clear-history`**: Clear conversation history and delete saved file
+- **`save`**: Manually save conversation history to disk
 - **`help`**: Show available commands
-- **`quit`/`exit`/`bye`**: Stop the application
+- **`quit`/`exit`/`bye`**: Exit the application (auto-saves conversation history)
 
 ### Agent Routing
 The system automatically classifies your requests:
@@ -106,28 +148,54 @@ The system automatically classifies your requests:
 ## Components
 
 ### `master_agent.py`
-- **Master Agent Controller**: Orchestrates the entire system
-- **Task Classification**: Automatically determines the appropriate agent
-- **LangGraph Workflow**: Multi-step processing with error handling
-- **Agent Coordination**: Routes tasks and synthesizes responses
+- **Master Agent Controller**: Orchestrates the entire system using LangGraph
+- **Task Classification**: Uses LLM to classify requests as chat, analysis, or grading
+- **LangGraph Workflow**: Multi-step processing (classify → route → manage data → synthesize)
+- **Agent Coordination**: Routes tasks to specialized agents with conversation history
+- **Conversation History**: Maintains 20-message rolling window shared across agents
+- **Session Persistence**: Automatically saves/restores conversation history
+- **System Monitoring**: Tracks performance metrics and health status
 
 ### `agents/` Directory
-- **`chat_agent.py`**: Specialized for general conversation and assistance
-- **`analysis_agent.py`**: Optimized for data analysis and computational tasks
-- **`grading_agent.py`**: Focused on educational assessment and grading
+All agents support both standard processing and conversation history:
+- **`chat_agent.py`**: General conversation with context awareness
+- **`analysis_agent.py`**: Data analysis and computational tasks with history
+- **`grading_agent.py`**: Educational assessment with conversation context
+
+Each agent implements:
+- `process(user_input)`: Basic processing without history
+- `process_with_history(user_input, conversation_history)`: Context-aware processing
+- `get_status()`: Agent health status
+- `get_capabilities()`: Agent capabilities description
+
+### `conversation_history.py`
+- **Rolling Window**: Maintains last 20 messages across all agents
+- **Session Persistence**: Saves to `data/conversation_history.json`
+- **Cross-Agent Sharing**: All agents access the same conversation context
+- **Message Attribution**: Tracks which agent generated each response
+- **LangChain Integration**: Formats messages for LLM consumption
 
 ### `data_manager.py`
-- **Persistent Storage**: Saves interaction history and context
-- **Context Retrieval**: Provides relevant historical context
-- **Data Analytics**: Tracks usage patterns and system performance
+- **Interaction Storage**: Saves all interactions to `data/interactions.jsonl`
+- **Context Retrieval**: Keyword-based relevance matching
+- **Usage Analytics**: Task type distribution and agent usage statistics
+- **Data Cleanup**: Configurable retention period for old interactions
 
 ### `config.py`
-- **Environment Management**: Loads and validates Azure OpenAI configuration
-- **Centralized Settings**: Provides configuration access across the system
+- **Environment Management**: Loads configuration from `.env` file
+- **Validation**: Ensures required Azure OpenAI settings are present
+- **Centralized Access**: Provides global config instance
+
+### `utils.py`
+- **SystemMonitor**: Tracks requests, errors, response times, and agent usage
+- **ConfigValidator**: Validates Azure config and data directory setup
+- **SystemHealthChecker**: Comprehensive health checks with status reporting
 
 ### `main.py`
-- **Application Entry Point**: Initializes and runs the master agent system
-- **Enhanced Interface**: Interactive chat with system commands and monitoring
+- **CLI Entry Point**: Initializes and runs the master agent system
+- **Argument Parsing**: Supports verbose mode (`-v`, `--verbose`)
+- **Interactive Commands**: Status, stats, health, history, and more
+- **Graceful Shutdown**: Auto-saves conversation history on exit
 
 ## Requirements
 
@@ -137,14 +205,30 @@ The system automatically classifies your requests:
 
 ## Advanced Features
 
+### Conversation History Management
+- **Rolling Window**: Keeps last 20 messages (configurable via `max_messages`)
+- **Session Persistence**: Automatically saves to `data/conversation_history.json`
+- **Cross-Session Continuity**: Restores history on startup for seamless continuation
+- **Agent Attribution**: Each message tagged with originating agent
+- **Manual Control**: Commands for viewing stats, clearing, and manual saves
+
 ### Data Persistence
-- **Interaction History**: All conversations are stored in `data/interactions.jsonl`
-- **Context Awareness**: System provides relevant context from previous interactions
-- **Usage Analytics**: Track agent usage patterns and system performance
+- **Interaction Logging**: All conversations stored in `data/interactions.jsonl` (JSONL format)
+- **Separate Concerns**: Conversation history (20-message window) vs. full interaction log
+- **Context Retrieval**: Keyword-based search for relevant past interactions
+- **Usage Analytics**: Task type distribution, agent usage, and recent activity tracking
+
+### System Monitoring
+- **Performance Metrics**: Response times, request counts, error rates
+- **Agent Statistics**: Per-agent usage and average response times
+- **Health Checks**: Configuration, data directory, connectivity, and system resources
+- **Uptime Tracking**: System uptime and requests per minute
 
 ### Extensibility
 - **Modular Design**: Easy to add new specialized agents
-- **Plugin Architecture**: Agents can be independently developed and tested
+- **Conversation History Support**: New agents can implement `process_with_history()` for context
+- **Backward Compatibility**: Agents without history support fall back to `process()`
+- **LangGraph Workflow**: Conditional routing enables complex agent orchestration
 - **Configuration Management**: Centralized settings for easy customization
 
 ## Error Handling

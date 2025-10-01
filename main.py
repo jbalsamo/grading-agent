@@ -5,6 +5,7 @@ import logging
 import argparse
 from modules.master_agent import MasterAgent
 from modules.config import config
+from modules.security import InputValidationException, RateLimitException
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +129,10 @@ def main():
                     print("   • history - Show conversation history stats")
                     print("   • clear-history - Clear conversation history")
                     print("   • save - Manually save conversation history")
+                    print("   • cache - Show cache statistics")
+                    print("   • clear-cache - Clear response cache")
+                    print("   • metrics - Show monitoring metrics")
+                    print("   • export-metrics - Export metrics to file")
                     print("   • help - Show this help message")
                     print("   • quit/exit/bye - Exit the system (auto-saves)")
                     print("   • Any other input - Chat with the system")
@@ -189,13 +194,56 @@ def main():
                         print("⚠️  Failed to save conversation history")
                     continue
                 
+                if user_input.lower() == 'cache':
+                    cache_stats = agent.get_cache_stats()
+                    print("\n💨 Cache Statistics:")
+                    print(f"   Enabled: {cache_stats['enabled']}")
+                    print(f"   Size: {cache_stats['size']}/{cache_stats['max_size']}")
+                    print(f"   Hits: {cache_stats['hits']}")
+                    print(f"   Misses: {cache_stats['misses']}")
+                    print(f"   Hit Rate: {cache_stats['hit_rate']}%")
+                    print(f"   TTL: {cache_stats['ttl']}s")
+                    continue
+                
+                if user_input.lower() == 'clear-cache':
+                    agent.clear_cache()
+                    print("🗑️  Response cache cleared!")
+                    continue
+                
+                if user_input.lower() == 'metrics':
+                    metrics = agent.get_metrics()
+                    print("\n📊 Monitoring Metrics:")
+                    print(f"   Uptime: {metrics['uptime_seconds']}s")
+                    print(f"   Total Requests: {metrics['total_requests']}")
+                    print(f"   Total Errors: {metrics['total_errors']}")
+                    print(f"   Error Rate: {metrics['overall_error_rate']}%")
+                    if metrics['agents']:
+                        print("   Agent Metrics:")
+                        for agent_name, agent_metrics in metrics['agents'].items():
+                            print(f"     - {agent_name}:")
+                            print(f"       Requests: {agent_metrics['request_count']}")
+                            print(f"       Avg Duration: {agent_metrics['average_duration']}s")
+                            print(f"       Errors: {agent_metrics['error_count']}")
+                    continue
+                
+                if user_input.lower() == 'export-metrics':
+                    print("📊 Exporting metrics...")
+                    agent.export_metrics()
+                    print("✅ Metrics exported to metrics.json")
+                    continue
+                
                 if not user_input:
                     print("⚠️  Please enter a message.")
                     continue
                 
                 print("🤔 Processing with Master Agent System...")
-                response = agent.chat(user_input)
-                print(f"🤖 Master Assistant: {response}")
+                try:
+                    response = agent.chat(user_input)
+                    print(f"🤖 Master Assistant: {response}")
+                except InputValidationException as e:
+                    print(f"⚠️  Input validation error: {e}")
+                except RateLimitException as e:
+                    print(f"⏱️  {e}")
                 
             except KeyboardInterrupt:
                 print("\n")

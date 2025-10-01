@@ -29,18 +29,26 @@ grading-agent/
 │       └── grading_agent.py   # Educational grading agent
 │
 ├── tests/                # Test suite
-│   ├── test_chat_history.py    # Conversation history tests
-│   ├── test_main_app.py        # Main application tests
-│   ├── test_persistence.py     # Persistence tests
-│   └── test_verbose_mode.py    # Logging tests
+│   ├── README.md                     # Testing documentation
+│   ├── conftest.py                   # Pytest fixtures
+│   ├── test_chat_history.py          # Conversation history tests
+│   ├── test_config.py                # Configuration tests
+│   ├── test_conversation_history.py  # History class tests
+│   ├── test_integration.py           # Integration tests
+│   ├── test_main_app.py              # Main application tests
+│   ├── test_persistence.py           # Persistence tests
+│   ├── test_utils.py                 # Utility tests
+│   └── test_verbose_mode.py          # Logging tests
 │
 ├── docs/                 # Documentation
-│   ├── PROJECT_STRUCTURE.md    # This file
-│   ├── USAGE.md               # Usage guide
-│   ├── PERSISTENCE_GUIDE.md   # Persistence documentation
-│   ├── CHANGELOG.md           # Change log
-│   ├── DEPLOYMENT_SUMMARY.md  # Deployment guide
-│   └── SYSTEM_OVERVIEW.md     # System architecture
+│   ├── PROJECT_STRUCTURE.md       # This file
+│   ├── USAGE.md                   # Usage guide
+│   ├── PERSISTENCE_GUIDE.md       # Persistence documentation
+│   ├── CHANGELOG.md               # Change log
+│   ├── DEPLOYMENT_SUMMARY.md      # Deployment guide
+│   ├── REORGANIZATION_SUMMARY.md  # Project reorganization notes
+│   ├── TESTING_SUMMARY.md         # Testing documentation
+│   └── SYSTEM_OVERVIEW.md         # System architecture
 │
 ├── examples/             # Example scripts
 │   ├── README.md
@@ -74,10 +82,13 @@ All core application logic is contained in the `modules/` package:
 ### Tests (`tests/`)
 
 Comprehensive test suite covering:
-- Conversation history functionality
-- Main application integration
-- Persistence across sessions
+- Conversation history functionality and persistence
+- Configuration validation and loading
+- Main application integration and workflows
+- System utilities and monitoring
 - Verbose mode logging
+- Agent processing with and without history
+- Data manager operations
 
 ### Documentation (`docs/`)
 
@@ -135,14 +146,24 @@ python main.py --help         # Show help
 
 ### Tests
 ```bash
-# Run individual tests
-python tests/test_chat_history.py
-python tests/test_persistence.py
-python tests/test_verbose_mode.py
-python tests/test_main_app.py
-
-# Run all tests (if using pytest)
+# Run all tests with pytest
 pytest tests/
+
+# Run individual test files
+pytest tests/test_chat_history.py
+pytest tests/test_conversation_history.py
+pytest tests/test_config.py
+pytest tests/test_integration.py
+pytest tests/test_main_app.py
+pytest tests/test_persistence.py
+pytest tests/test_utils.py
+pytest tests/test_verbose_mode.py
+
+# Run with verbose output
+pytest tests/ -v
+
+# Run with coverage report
+pytest tests/ --cov=modules --cov-report=html
 ```
 
 ### Examples

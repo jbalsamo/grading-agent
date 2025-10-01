@@ -7,6 +7,9 @@ from langgraph.graph import StateGraph, END
 from .config import config
 from .utils import SystemMonitor
 from .conversation_history import ConversationHistory
+from .security import InputValidator, RateLimiter, InputValidationException, RateLimitException
+from .performance import ResponseCache, TokenOptimizer, PerformanceMonitor
+from .monitoring import metrics_collector
 import logging
 import json
 import time
@@ -37,7 +40,14 @@ class MasterAgent:
         self.specialized_agents = {}
         self.data_manager = None
         self.monitor = SystemMonitor()
-        self.conversation_history = ConversationHistory(max_messages=20)
+        self.conversation_history = ConversationHistory(max_messages=config.max_conversation_messages)
+        
+        # Security and performance components
+        self.input_validator = InputValidator()
+        self.rate_limiter = RateLimiter()
+        self.response_cache = ResponseCache()
+        self.performance_monitor = PerformanceMonitor()
+        
         self._initialize_agents()
         
         # Load previous conversation history if available
@@ -306,17 +316,51 @@ class MasterAgent:
         from datetime import datetime
         return datetime.now().isoformat()
     
-    def chat(self, user_input: str) -> str:
-        """Main chat method to interact with the master agent."""
+    def chat(self, user_input: str, session_id: str = "default") -> str:
+        """Main chat method to interact with the master agent.
+        
+        Args:
+            user_input: The user's input message
+            session_id: Session identifier for rate limiting (default: "default")
+            
+        Returns:
+            The agent's response
+            
+        Raises:
+            InputValidationException: If input validation fails
+            RateLimitException: If rate limit is exceeded
+        """
         start_time = time.time()
         success = True
         agent_type = "unknown"
         
         try:
-            # Add user message to conversation history
+            # Step 1: Validate input
+            validation_result = self.input_validator.validate_input(user_input)
+            if not validation_result["valid"]:
+                raise InputValidationException(validation_result["error"])
+            
+            # Sanitize input
+            user_input = self.input_validator.sanitize_input(user_input)
+            
+            # Step 2: Check rate limit
+            rate_check = self.rate_limiter.check_rate_limit(session_id)
+            if not rate_check["allowed"]:
+                raise RateLimitException(
+                    f"Rate limit exceeded. Please try again in {rate_check['retry_after']} seconds."
+                )
+            
+            # Step 3: Check cache
+            cache_context = str(len(self.conversation_history))  # Simple context key
+            cached_response = self.response_cache.get(user_input, cache_context)
+            if cached_response:
+                logger.info("Returning cached response")
+                return cached_response
+            
+            # Step 4: Add user message to conversation history
             self.conversation_history.add_user_message(user_input)
             
-            # Initialize state
+            # Step 5: Initialize state
             initial_state = {
                 "messages": [],
                 "user_input": user_input,
@@ -329,25 +373,39 @@ class MasterAgent:
                 "conversation_history": self.conversation_history.get_messages_for_llm()
             }
             
-            # Run the graph
+            # Step 6: Run the graph
             result = self.graph.invoke(initial_state)
             agent_type = result.get("task_classification", "unknown")
             
             response = result.get("response", "No response generated")
             
-            # Add assistant response to conversation history
+            # Step 7: Cache the response
+            self.response_cache.set(user_input, response, cache_context)
+            
+            # Step 8: Add assistant response to conversation history
             self.conversation_history.add_assistant_message(response, agent_type)
             
-            # Log successful request
+            # Step 9: Track performance
             response_time = time.time() - start_time
             self.monitor.log_request(agent_type, response_time, success=True)
+            metrics_collector.record_request(agent_type, response_time, success=True)
+            
+            # Estimate and record token usage
+            estimated_tokens = TokenOptimizer.estimate_tokens(user_input + response)
+            self.performance_monitor.record_token_usage(estimated_tokens)
             
             return response
+            
+        except (InputValidationException, RateLimitException) as e:
+            # These are expected exceptions, don't log as errors
+            logger.warning(f"Request blocked: {e}")
+            raise
             
         except Exception as e:
             success = False
             response_time = time.time() - start_time
             self.monitor.log_request(agent_type, response_time, success=False)
+            metrics_collector.record_request(agent_type, response_time, success=False, error=str(e))
             
             error_response = f"I apologize, but I encountered an error: {str(e)}"
             # Still add the error response to history for context
@@ -450,6 +508,27 @@ class MasterAgent:
             logger.error(f"Error saving conversation history: {e}")
             return False
     
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get response cache statistics."""
+        return self.response_cache.get_stats()
+    
+    def get_performance_stats_detailed(self) -> Dict[str, Any]:
+        """Get detailed performance statistics including token usage."""
+        return self.performance_monitor.get_stats()
+    
+    def get_metrics(self) -> Dict[str, Any]:
+        """Get collected metrics for monitoring."""
+        return metrics_collector.get_metrics()
+    
+    def export_metrics(self, filepath: str = "metrics.json"):
+        """Export metrics to file."""
+        metrics_collector.export_to_file(filepath)
+    
+    def clear_cache(self):
+        """Clear the response cache."""
+        self.response_cache.clear()
+        logger.info("Response cache cleared")
+    
     def shutdown(self) -> None:
         """Perform cleanup operations before shutdown."""
         logger.info("Shutting down Master Agent...")
@@ -461,5 +540,13 @@ class MasterAgent:
                 print(f"✅ Saved {len(self.conversation_history)} messages for next session")
             else:
                 print("⚠️  Could not save conversation history")
+        
+        # Export metrics before shutdown
+        if config.enable_metrics:
+            try:
+                self.export_metrics()
+                print("📊 Metrics exported to metrics.json")
+            except Exception as e:
+                logger.warning(f"Failed to export metrics: {e}")
         
         logger.info("Master Agent shutdown complete")

@@ -25,7 +25,7 @@ class AnalysisAgent:
         """Create Azure OpenAI LLM instance for analysis."""
         return AzureChatOpenAI(
             **config.get_azure_openai_kwargs(),
-            temperature=1.0,  # Using supported temperature
+            temperature=config.agent_temperature,
         )
     
     def process(self, user_input: str) -> str:
