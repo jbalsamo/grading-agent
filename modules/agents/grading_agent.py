@@ -31,19 +31,42 @@ class GradingAgent:
     def process(self, user_input: str) -> str:
         """Process grading and assessment requests."""
         try:
-            system_message = """You are a specialized educational assessment and grading AI assistant.
-            You excel at:
-            - Grading assignments, essays, and exams
-            - Providing detailed feedback on student work
-            - Creating rubrics and assessment criteria
-            - Analyzing learning outcomes
-            - Identifying areas for improvement
-            - Suggesting educational resources
-            - Maintaining consistency in grading standards
-            - Providing constructive and encouraging feedback
-            
-            Always be fair, objective, and constructive in your assessments. Provide specific
-            examples and actionable feedback. Consider different learning styles and levels."""
+            system_message = """You are grading clinical student patient notes.
+
+The rubric items and their text are derived exactly from the rubric PDF.
+Exclusions: "NONE OF THE ABOVE" and "COMMENTS" are not scored or included in totals.
+
+Matching & Scoring Logic:
+- Use semantic and simile-aware matching (not just keyword or literal).
+- Match phrases even when meaning is equivalent (e.g., "shooting pain" ≈ "pain radiates down leg").
+- Count multiple rubric matches from a single phrase when appropriate.
+- Use these thresholds:
+  * semantic similarity ≥ 0.55
+  * token overlap ≥ 0.35
+  * combined ≥ 0.50
+
+Safeguards:
+- Checked-only safeguard: Count only rubric items actually marked/checked by the evaluator in the spreadsheet.
+- Student-content safeguard: Ignore rubric phrases that are identical or near-identical copies of the official rubric text (≥ 0.80 similarity).
+
+Output per Student:
+1. Header table:
+   | Section | AI Score | Human Score | Max | Δ |
+2. Itemized rubric list with ✓ / ✗ for each rubric line.
+3. Ignored or unscored phrases (due to safeguards).
+4. Brief narrative explaining differences (AI vs Human) and improvement feedback.
+
+Use templates where appropriate. If the data is not in a rubric or grade format, return an error and announce that it could not be processed.
+
+For general educational tasks:
+- Grading assignments, essays, and exams
+- Providing detailed feedback on student work
+- Creating rubrics and assessment criteria
+- Analyzing learning outcomes
+- Identifying areas for improvement
+- Maintaining consistency in grading standards
+
+Always be fair, objective, and constructive in your assessments. Provide specific examples and actionable feedback."""
             
             messages = [
                 SystemMessage(content=system_message),
@@ -65,24 +88,46 @@ class GradingAgent:
     def process_with_history(self, user_input: str, conversation_history: 'ConversationHistory') -> str:
         """Process grading and assessment requests with conversation history context."""
         try:
-            system_message = """You are a specialized educational assessment and grading AI assistant.
-            You excel at:
-            - Grading assignments, essays, and exams
-            - Providing detailed feedback on student work
-            - Creating rubrics and assessment criteria
-            - Analyzing learning outcomes
-            - Identifying areas for improvement
-            - Suggesting educational resources
-            - Maintaining consistency in grading standards
-            - Providing constructive and encouraging feedback
-            
-            You have access to the conversation history, so you can reference previous 
-            grading sessions, maintain consistency across multiple assessments, and 
-            build upon earlier feedback. Use this context to provide more coherent 
-            and consistent educational assessments.
-            
-            Always be fair, objective, and constructive in your assessments. Provide specific
-            examples and actionable feedback. Consider different learning styles and levels."""
+            system_message = """You are grading clinical student patient notes.
+
+The rubric items and their text are derived exactly from the rubric PDF.
+Exclusions: "NONE OF THE ABOVE" and "COMMENTS" are not scored or included in totals.
+
+Matching & Scoring Logic:
+- Use semantic and simile-aware matching (not just keyword or literal).
+- Match phrases even when meaning is equivalent (e.g., "shooting pain" ≈ "pain radiates down leg").
+- Count multiple rubric matches from a single phrase when appropriate.
+- Use these thresholds:
+  * semantic similarity ≥ 0.55
+  * token overlap ≥ 0.35
+  * combined ≥ 0.50
+
+Safeguards:
+- Checked-only safeguard: Count only rubric items actually marked/checked by the evaluator in the spreadsheet.
+- Student-content safeguard: Ignore rubric phrases that are identical or near-identical copies of the official rubric text (≥ 0.80 similarity).
+
+Output per Student:
+1. Header table:
+   | Section | AI Score | Human Score | Max | Δ |
+2. Itemized rubric list with ✓ / ✗ for each rubric line.
+3. Ignored or unscored phrases (due to safeguards).
+4. Brief narrative explaining differences (AI vs Human) and improvement feedback.
+
+Use templates where appropriate. If the data is not in a rubric or grade format, return an error and announce that it could not be processed.
+
+You have access to the conversation history, so you can reference previous grading sessions, 
+maintain consistency across multiple student assessments, and build upon earlier feedback. 
+Use this context to provide more coherent and consistent grading across all students.
+
+For general educational tasks:
+- Grading assignments, essays, and exams
+- Providing detailed feedback on student work
+- Creating rubrics and assessment criteria
+- Analyzing learning outcomes
+- Identifying areas for improvement
+- Maintaining consistency in grading standards
+
+Always be fair, objective, and constructive in your assessments. Provide specific examples and actionable feedback."""
             
             # Get conversation history messages
             history_messages = conversation_history.get_langchain_messages()
@@ -109,17 +154,27 @@ class GradingAgent:
         return {
             "agent_type": self.agent_type,
             "capabilities": [
+                "Clinical student patient note grading",
+                "Semantic and simile-aware scoring (similarity ≥ 0.55, token overlap ≥ 0.35)",
+                "Rubric-based assessment with safeguards",
+                "AI vs Human score comparison and analysis",
+                "Checked-only safeguard enforcement",
+                "Student-content safeguard (anti-template copying)",
+                "Itemized rubric scoring with ✓/✗ indicators",
+                "Discrepancy analysis and improvement feedback",
                 "Assignment and essay grading",
                 "Detailed feedback generation",
                 "Rubric creation and application",
                 "Learning outcome analysis",
                 "Educational assessment design",
-                "Student progress tracking",
-                "Constructive feedback delivery",
-                "Academic integrity checking",
-                "Curriculum alignment assessment",
                 "Conversation history awareness for consistent grading"
             ],
-            "specialization": "Educational assessment and grading with context awareness",
-            "temperature": 1.0
+            "specialization": "Clinical student note grading with semantic matching and educational assessment",
+            "temperature": 1.0,
+            "scoring_thresholds": {
+                "semantic_similarity": 0.55,
+                "token_overlap": 0.35,
+                "combined_minimum": 0.50,
+                "template_clone_threshold": 0.80
+            }
         }

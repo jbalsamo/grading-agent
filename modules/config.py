@@ -34,7 +34,8 @@ class AzureOpenAIConfig:
         self.rate_limit_period = int(os.getenv("RATE_LIMIT_PERIOD", "60"))
         
         # Input validation settings
-        self.max_input_length = int(os.getenv("MAX_INPUT_LENGTH", "10000"))
+        # Increased default to support document processing (500k chars ~= 125k tokens)
+        self.max_input_length = int(os.getenv("MAX_INPUT_LENGTH", "500000"))
         
         # Performance settings
         self.enable_response_cache = os.getenv("ENABLE_RESPONSE_CACHE", "true").lower() == "true"

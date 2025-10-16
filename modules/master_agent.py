@@ -19,7 +19,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class MasterAgentState(TypedDict):
-    """State definition for the master agent."""
+    """State definition for the master agent.
+    
+    This TypedDict defines the state structure used throughout the LangGraph workflow.
+    It tracks all information needed for processing user requests through the multi-agent system.
+    
+    Attributes:
+        messages: List of chat messages in LangChain format
+        user_input: The original user input string
+        response: The final synthesized response
+        error: Any error message encountered during processing
+        agent_type: Type of agent handling the request (chat, analysis, grading, code_review)
+        task_classification: Classification result from the task classifier
+        agent_responses: Dictionary mapping agent names to their responses
+        data_context: Contextual data retrieved from the data manager
+        conversation_history: List of previous conversation messages
+    """
     messages: list
     user_input: str
     response: str
@@ -31,10 +46,49 @@ class MasterAgentState(TypedDict):
     conversation_history: list
 
 class MasterAgent:
-    """Master Agent Controller for managing specialized agents and data."""
+    """Master Agent Controller for managing specialized agents and data.
+    
+    The MasterAgent serves as the central orchestrator for the multi-agent system.
+    It uses LangGraph to manage a workflow that classifies tasks, routes them to
+    specialized agents, manages data persistence, and synthesizes responses.
+    
+    Key Features:
+        - Task classification using LLM
+        - Routing to specialized agents (chat, analysis, grading, code review)
+        - Conversation history management with persistence
+        - Data storage and retrieval
+        - Performance monitoring and health checks
+        - Security features (input validation, rate limiting)
+        - Response caching for improved performance
+    
+    Attributes:
+        llm: Azure OpenAI LLM instance
+        graph: LangGraph compiled workflow
+        specialized_agents: Dictionary of initialized specialized agents
+        data_manager: Data persistence manager
+        monitor: System performance monitor
+        conversation_history: Conversation history manager with rolling window
+        input_validator: Input validation and sanitization
+        rate_limiter: Request rate limiting
+        response_cache: Response caching for common queries
+        performance_monitor: Performance metrics tracker
+    """
     
     def __init__(self):
-        """Initialize the master agent with Azure OpenAI configuration."""
+        """Initialize the master agent with Azure OpenAI configuration.
+        
+        This constructor:
+        1. Creates the Azure OpenAI LLM instance
+        2. Builds the LangGraph workflow
+        3. Initializes specialized agents (chat, analysis, grading, code review)
+        4. Sets up data management
+        5. Configures security and performance components
+        6. Loads previous conversation history from disk if available
+        
+        Raises:
+            ValueError: If required configuration is missing or invalid
+            Exception: If Azure OpenAI initialization fails
+        """
         self.llm = self._create_llm()
         self.graph = self._create_graph()
         self.specialized_agents = {}
@@ -54,7 +108,17 @@ class MasterAgent:
         self._load_conversation_history()
     
     def _create_llm(self) -> AzureChatOpenAI:
-        """Create Azure OpenAI LLM instance."""
+        """Create Azure OpenAI LLM instance.
+        
+        Initializes the LangChain Azure OpenAI chat model with configuration
+        from the config module.
+        
+        Returns:
+            AzureChatOpenAI: Configured LLM instance
+            
+        Raises:
+            Exception: If Azure OpenAI initialization fails
+        """
         try:
             llm = AzureChatOpenAI(
                 **config.get_azure_openai_kwargs(),
@@ -67,7 +131,19 @@ class MasterAgent:
             raise
     
     def _initialize_agents(self):
-        """Initialize specialized agents."""
+        """Initialize specialized agents.
+        
+        Attempts to import and initialize all specialized agents:
+        - ChatAgent: General conversation and questions
+        - AnalysisAgent: Data analysis and computational tasks
+        - GradingAgent: Educational assessment and grading
+        - CodeReviewAgent: Code review and quality analysis
+        
+        Also initializes the DataManager for persistent storage.
+        
+        If any agents fail to import, logs a warning and continues with
+        available agents only.
+        """
         try:
             # Import and initialize specialized agents
             from .agents.chat_agent import ChatAgent
@@ -91,7 +167,21 @@ class MasterAgent:
             logger.info("Running with basic master agent only")
     
     def _create_graph(self) -> StateGraph:
-        """Create the LangGraph workflow for the master agent."""
+        """Create the LangGraph workflow for the master agent.
+        
+        Builds a LangGraph state machine with the following nodes:
+        - classify_task: Classify user request into task type
+        - route_to_agent: Route to appropriate specialized agent
+        - manage_data: Store interaction and retrieve context
+        - synthesize_response: Combine agent response with context
+        - handle_error: Handle any errors in the workflow
+        
+        The workflow uses conditional edges to handle different paths
+        based on task classification and error states.
+        
+        Returns:
+            StateGraph: Compiled LangGraph workflow
+        """
         workflow = StateGraph(MasterAgentState)
         
         # Add nodes
@@ -131,7 +221,20 @@ class MasterAgent:
         return workflow.compile()
     
     def _classify_task(self, state: MasterAgentState) -> MasterAgentState:
-        """Classify the user's task to determine which agent to use."""
+        """Classify the user's task to determine which agent to use.
+        
+        Uses the LLM to analyze the user input and classify it into one of:
+        - chat: General conversation, questions, or assistance
+        - analysis: Data analysis, file processing, or computational tasks
+        - grading: Educational assessment, grading, or evaluation
+        - code_review: Code review, refactoring, or quality analysis
+        
+        Args:
+            state: Current agent state containing user input
+            
+        Returns:
+            Updated state with task_classification and agent_type set
+        """
         try:
             user_input = state.get("user_input", "")
             if not user_input.strip():
@@ -187,7 +290,19 @@ class MasterAgent:
             return state
     
     def _route_to_agent(self, state: MasterAgentState) -> MasterAgentState:
-        """Route the task to the appropriate specialized agent."""
+        """Route the task to the appropriate specialized agent.
+        
+        Sends the user request to the specialized agent determined by task
+        classification. If the agent supports conversation history, it is
+        passed along for context-aware responses. Falls back to master agent
+        if no specialized agent is available.
+        
+        Args:
+            state: Current agent state with task classification
+            
+        Returns:
+            Updated state with agent_responses containing the agent's output
+        """
         try:
             agent_type = state.get("agent_type", "chat")
             user_input = state.get("user_input", "")
@@ -232,7 +347,18 @@ class MasterAgent:
             return state
     
     def _manage_data(self, state: MasterAgentState) -> MasterAgentState:
-        """Manage data context and storage."""
+        """Manage data context and storage.
+        
+        Stores the current interaction in the data manager and retrieves
+        relevant historical context based on the user input. This enables
+        the system to maintain long-term memory beyond the conversation window.
+        
+        Args:
+            state: Current agent state with user input and agent responses
+            
+        Returns:
+            Updated state with data_context containing relevant historical interactions
+        """
         try:
             if self.data_manager:
                 user_input = state.get("user_input", "")
@@ -265,7 +391,18 @@ class MasterAgent:
             return state
     
     def _synthesize_response(self, state: MasterAgentState) -> MasterAgentState:
-        """Synthesize the final response from agent outputs and data context."""
+        """Synthesize the final response from agent outputs and data context.
+        
+        Combines the agent's response with any relevant historical context
+        to create the final response. Optionally enhances the response with
+        context information when relevant interactions are found.
+        
+        Args:
+            state: Current agent state with agent responses and data context
+            
+        Returns:
+            Updated state with final response ready for user
+        """
         try:
             agent_responses = state.get("agent_responses", {})
             data_context = state.get("data_context", {})
@@ -292,20 +429,51 @@ class MasterAgent:
             return state
     
     def _handle_error(self, state: MasterAgentState) -> MasterAgentState:
-        """Handle errors in the workflow."""
+        """Handle errors in the workflow.
+        
+        Creates a user-friendly error response when any step in the
+        workflow encounters an error.
+        
+        Args:
+            state: Current agent state with error message
+            
+        Returns:
+            Updated state with error response
+        """
         error_msg = state.get("error", "Unknown error occurred")
         state["response"] = f"I apologize, but I encountered an error: {error_msg}"
         logger.error(f"Handled error: {error_msg}")
         return state
     
     def _should_continue_classification(self, state: MasterAgentState) -> str:
-        """Determine whether to continue after classification."""
+        """Determine whether to continue after classification.
+        
+        Conditional edge function that routes to error handler if classification
+        failed, otherwise routes to agent routing.
+        
+        Args:
+            state: Current agent state
+            
+        Returns:
+            'error' if error exists, 'route' otherwise
+        """
         if state.get("error"):
             return "error"
         return "route"
     
     def _should_manage_data(self, state: MasterAgentState) -> str:
-        """Determine whether to manage data after routing."""
+        """Determine whether to manage data after routing.
+        
+        Conditional edge function that routes to error handler if routing failed,
+        to data management if data manager is available, or directly to response
+        synthesis otherwise.
+        
+        Args:
+            state: Current agent state
+            
+        Returns:
+            'error', 'data', or 'synthesize' depending on state and availability
+        """
         if state.get("error"):
             return "error"
         if self.data_manager:
@@ -313,7 +481,11 @@ class MasterAgent:
         return "synthesize"
     
     def _get_timestamp(self) -> str:
-        """Get current timestamp."""
+        """Get current timestamp in ISO format.
+        
+        Returns:
+            Current timestamp as ISO 8601 formatted string
+        """
         from datetime import datetime
         return datetime.now().isoformat()
     
@@ -416,7 +588,17 @@ class MasterAgent:
             return error_response
     
     def get_info(self) -> Dict[str, Any]:
-        """Get information about the master agent configuration."""
+        """Get information about the master agent configuration.
+        
+        Returns:
+            Dictionary containing:
+                - endpoint: Azure OpenAI endpoint URL
+                - deployment: Model deployment name
+                - api_version: API version being used
+                - model_type: Type of model (Master Agent)
+                - specialized_agents: List of available specialized agents
+                - data_manager_available: Whether data manager is active
+        """
         return {
             "endpoint": config.endpoint,
             "deployment": config.chat_deployment,
@@ -427,7 +609,17 @@ class MasterAgent:
         }
     
     def get_agent_status(self) -> Dict[str, Any]:
-        """Get status of all managed agents."""
+        """Get status of all managed agents.
+        
+        Queries each specialized agent for its status and compiles a
+        comprehensive status report for the entire system.
+        
+        Returns:
+            Dictionary containing:
+                - master_agent: Master agent status (always 'active')
+                - specialized_agents: Status of each specialized agent
+                - data_manager: Data manager status ('active' or 'inactive')
+        """
         status = {
             "master_agent": "active",
             "specialized_agents": {},
@@ -447,17 +639,42 @@ class MasterAgent:
         return status
     
     def get_performance_stats(self) -> Dict[str, Any]:
-        """Get performance statistics from the system monitor."""
+        """Get performance statistics from the system monitor.
+        
+        Returns:
+            Dictionary containing:
+                - uptime_formatted: Human-readable uptime
+                - total_requests: Total number of requests processed
+                - error_rate: Percentage of failed requests
+                - average_response_time: Average response time in seconds
+                - requests_per_minute: Request rate
+                - agent_usage: Per-agent usage statistics
+        """
         return self.monitor.get_stats()
     
     def run_health_check(self) -> Dict[str, Any]:
-        """Run a comprehensive health check."""
+        """Run a comprehensive health check.
+        
+        Checks configuration, data directory, connectivity, and system resources.
+        
+        Returns:
+            Dictionary containing:
+                - overall_status: 'healthy', 'degraded', or 'unhealthy'
+                - checks: Individual check results with status for each component
+        """
         from .utils import SystemHealthChecker
         health_checker = SystemHealthChecker(self)
         return health_checker.run_health_check()
     
     def get_conversation_history(self) -> Dict[str, Any]:
-        """Get conversation history statistics and recent messages."""
+        """Get conversation history statistics and recent messages.
+        
+        Returns:
+            Dictionary containing:
+                - stats: Message count statistics and agent usage
+                - recent_context: Formatted recent conversation context
+                - total_messages: Total number of messages in history
+        """
         return {
             "stats": self.conversation_history.get_stats(),
             "recent_context": self.conversation_history.get_recent_context(10),
@@ -465,12 +682,23 @@ class MasterAgent:
         }
     
     def clear_conversation_history(self) -> None:
-        """Clear the conversation history."""
+        """Clear the conversation history.
+        
+        Removes all messages from the conversation history. This does not
+        delete the saved history file; use conversation_history.delete_saved_history()
+        for that.
+        """
         self.conversation_history.clear_history()
         logger.info("Conversation history cleared by user request")
     
     def set_conversation_history_limit(self, max_messages: int) -> None:
-        """Set the maximum number of messages to keep in conversation history."""
+        """Set the maximum number of messages to keep in conversation history.
+        
+        Updates the rolling window size and trims existing messages if necessary.
+        
+        Args:
+            max_messages: Maximum number of messages to retain (must be > 0)
+        """
         if max_messages > 0:
             self.conversation_history.max_messages = max_messages
             # Trim if necessary
@@ -481,7 +709,12 @@ class MasterAgent:
             logger.warning("Invalid conversation history limit. Must be greater than 0.")
     
     def _load_conversation_history(self) -> None:
-        """Load conversation history from disk on startup."""
+        """Load conversation history from disk on startup.
+        
+        Attempts to restore the previous conversation session from the saved
+        history file. If no file exists or loading fails, starts with a fresh
+        conversation history.
+        """
         try:
             if self.conversation_history.load_from_disk():
                 loaded_count = len(self.conversation_history)
@@ -510,28 +743,67 @@ class MasterAgent:
             return False
     
     def get_cache_stats(self) -> Dict[str, Any]:
-        """Get response cache statistics."""
+        """Get response cache statistics.
+        
+        Returns:
+            Dictionary containing cache metrics:
+                - enabled: Whether caching is enabled
+                - size: Current number of cached entries
+                - max_size: Maximum cache capacity
+                - hits: Number of cache hits
+                - misses: Number of cache misses
+                - hit_rate: Cache hit rate percentage
+                - ttl: Time-to-live in seconds
+        """
         return self.response_cache.get_stats()
     
     def get_performance_stats_detailed(self) -> Dict[str, Any]:
-        """Get detailed performance statistics including token usage."""
+        """Get detailed performance statistics including token usage.
+        
+        Returns:
+            Dictionary containing detailed performance metrics including
+            token consumption and processing times
+        """
         return self.performance_monitor.get_stats()
     
     def get_metrics(self) -> Dict[str, Any]:
-        """Get collected metrics for monitoring."""
+        """Get collected metrics for monitoring.
+        
+        Returns:
+            Dictionary containing system-wide metrics:
+                - uptime_seconds: System uptime
+                - total_requests: Total requests processed
+                - total_errors: Total errors encountered
+                - overall_error_rate: System-wide error rate
+                - agents: Per-agent metrics
+        """
         return metrics_collector.get_metrics()
     
     def export_metrics(self, filepath: str = "metrics.json"):
-        """Export metrics to file."""
+        """Export metrics to file.
+        
+        Saves current metrics to a JSON file for analysis or monitoring.
+        
+        Args:
+            filepath: Path to save metrics file (default: 'metrics.json')
+        """
         metrics_collector.export_to_file(filepath)
     
     def clear_cache(self):
-        """Clear the response cache."""
+        """Clear the response cache.
+        
+        Removes all cached responses, forcing fresh processing for all
+        subsequent requests.
+        """
         self.response_cache.clear()
         logger.info("Response cache cleared")
     
     def shutdown(self) -> None:
-        """Perform cleanup operations before shutdown."""
+        """Perform cleanup operations before shutdown.
+        
+        Saves conversation history to disk and exports metrics if enabled.
+        Should be called before the application exits to preserve session data.
+        """
         logger.info("Shutting down Master Agent...")
         
         # Save conversation history

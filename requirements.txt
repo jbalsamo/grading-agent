@@ -6,6 +6,10 @@ pydantic==2.9.2
 typing-extensions==4.12.2
 psutil==5.9.8
 
+# StreamLit and Document Processing
+streamlit==1.31.1
+markitdown==0.0.1a2
+
 # Testing
 pytest==8.0.0
 pytest-cov==4.1.0

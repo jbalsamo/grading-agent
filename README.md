@@ -1,33 +1,41 @@
 # Azure OpenAI Master Agent System
 
-> A modular, multi-agent system with conversation history persistence and specialized AI agents with LangGraph
+> A modular, multi-agent system with StreamLit web interface, document processing, and specialized AI agents with LangGraph
 
-A sophisticated multi-agent Python application that uses LangGraph and LangChain to manage specialized AI agents and data storage with Azure OpenAI services.
+A sophisticated multi-agent Python application that uses LangGraph and LangChain to manage specialized AI agents and data storage with Azure OpenAI services. Features a modern StreamLit web interface with Google APK-style debugging tools and document upload capabilities.
 
 ## Features
 
+- 🌐 **StreamLit Web Interface**: Modern dark-themed web UI with Google APK-style debugging tools
+- 📄 **Document Upload & Processing**: Upload PDFs, DOCX, Excel, and more - automatically converted to markdown
+- 🔍 **Advanced Debugging Tools**: Variable viewer, request history, and agent state inspection
+- 📊 **Real-time Token Tracking**: Monitor token usage across documents and conversations
 - 🎯 **Master Agent Controller**: Intelligent task routing and agent coordination using LangGraph
-- 🤖 **Specialized Agents**: Chat, Analysis, and Grading agents with unique capabilities
+- 🤖 **Specialized Agents**: Chat, Analysis, Grading, and Code Review agents with unique capabilities
+- 📋 **Clinical Grading**: Specialized semantic grading for clinical student patient notes with safeguards
 - 💬 **Conversation History**: Shared 20-message rolling window across all agents with persistence
 - 💾 **Data Management**: Persistent storage of interactions in JSONL format
 - 🔄 **LangGraph Workflows**: Structured multi-step agent processing with conditional routing
 - ⚙️ **Modular Architecture**: Clean separation of concerns and extensible design
-- 📊 **System Monitoring**: Performance tracking, health checks, and usage statistics
-- 💻 **Interactive CLI**: Enhanced chat with system commands, verbose mode, and status monitoring
-- 🛡️ **Comprehensive Error Handling**: Robust error management and logging
-- 🔁 **Session Persistence**: Conversation history automatically saves and restores between sessions
+- 📈 **System Monitoring**: Performance tracking, health checks, and usage statistics
+- 💻 **Interactive CLI**: Enhanced command-line interface with system commands and verbose mode
+- 🛡️ **Security Features**: Input validation, rate limiting, and sanitization
+- 🔁 **Session Persistence**: Conversation history and session data automatically saved
 
 ## Project Structure
 
 ```
 grading-agent/
-├── main.py                 # Application entry point
+├── app.py                 # StreamLit web application
+├── main.py                # CLI application entry point
 ├── README.md              # Project overview
+├── GRADING_GUIDE.md       # Clinical grading instructions
 ├── requirements.txt       # Python dependencies
 ├── pytest.ini             # Pytest configuration
 ├── .env                   # Configuration (not in git)
 ├── .env.template          # Environment template
 ├── .gitignore            # Git ignore rules
+├── run_app.sh             # StreamLit app launcher script
 │
 ├── modules/              # Core application modules
 │   ├── __init__.py       # Module initialization
@@ -41,7 +49,8 @@ grading-agent/
 │       ├── __init__.py        # Agents module init
 │       ├── chat_agent.py      # General conversation
 │       ├── analysis_agent.py  # Data analysis
-│       └── grading_agent.py   # Educational grading
+│       ├── grading_agent.py   # Educational grading
+│       └── grading_prompts.py # Clinical grading prompt templates
 │
 ├── tests/                # Test suite
 │   ├── README.md              # Testing documentation
@@ -108,6 +117,25 @@ grading-agent/
    ```
 
 3. **Run the application:**
+   
+   **Option A: StreamLit Web Interface (Recommended)**
+   ```bash
+   # Start the StreamLit web app (normal mode)
+   streamlit run app.py
+   
+   # Start with debug mode enabled
+   streamlit run app.py -- -D
+   # or
+   streamlit run app.py -- --debug
+   
+   # Using the run script
+   ./run_app.sh          # Normal mode
+   ./run_app.sh -D       # Debug mode
+   
+   # App will open in your browser at http://localhost:8501
+   ```
+   
+   **Option B: Command-Line Interface**
    ```bash
    # Run in quiet mode (WARNING level and above)
    python main.py
@@ -119,14 +147,59 @@ grading-agent/
 
 ## Usage
 
-The Master Agent System will:
-1. Initialize the master agent controller with Azure OpenAI
-2. Load specialized agents (Chat, Analysis, Grading)
-3. Set up data management system and conversation history
-4. Restore previous conversation history from disk (if available)
-5. Send a hello message to test the connection
-6. Start an interactive chat session with intelligent routing
-7. Auto-save conversation history on exit
+### StreamLit Web Interface
+
+The StreamLit app provides a modern web interface with:
+
+**Main Features:**
+- **Document Upload**: Upload PDFs, DOCX, Excel, PowerPoint, and text files
+  - Automatic conversion to markdown using `markitdown` library
+  - Documents added to agent context for enhanced responses
+  - Real-time token usage tracking
+- **Chat Interface**: Interactive conversation with the master agent
+  - Message history display with metadata
+  - Real-time response generation
+  - Context-aware responses using uploaded documents
+- **Debugging Tools** (Google APK-style):
+  - **Variable Viewer**: Inspect session state and runtime variables
+  - **Request History**: View detailed request/response logs
+  - **Agent State**: Monitor agent status and configuration
+- **Metrics Sidebar**:
+  - Total token usage across all documents and messages
+  - Document count and details
+  - Request statistics and performance metrics
+  - Error rate monitoring
+
+**Getting Started:**
+1. Start the app: `streamlit run app.py` (or with `-D` for debug mode)
+2. Upload documents (optional) using the sidebar
+3. Start chatting with the agent
+4. Enable debug mode to inspect variables and requests (if not already enabled via `-D`)
+5. Export session data for analysis
+
+**Debug Mode:**
+Debug mode can be enabled in two ways:
+- **CLI flag**: Use `-D` or `--debug` when starting the app
+- **UI toggle**: Click the toggle switch in the sidebar (only visible if debug mode is accessible)
+
+When debug mode is enabled, you get:
+- Document processing details (character counts, token estimates)
+- Context size information before each request
+- Full markdown preview of uploaded documents
+- Variable viewer showing session state
+- Request history with detailed JSON logs
+- Agent state inspector
+
+### Command-Line Interface
+
+The CLI provides a terminal-based interface that:
+1. Initializes the master agent controller with Azure OpenAI
+2. Loads specialized agents (Chat, Analysis, Grading, Code Review)
+3. Sets up data management system and conversation history
+4. Restores previous conversation history from disk (if available)
+5. Sends a hello message to test the connection
+6. Starts an interactive chat session with intelligent routing
+7. Auto-saves conversation history on exit
 
 ### Interactive Commands
 - **Regular messages**: Automatically routed to appropriate specialized agents
@@ -161,6 +234,10 @@ All agents support both standard processing and conversation history:
 - **`chat_agent.py`**: General conversation with context awareness
 - **`analysis_agent.py`**: Data analysis and computational tasks with history
 - **`grading_agent.py`**: Educational assessment with conversation context
+  - **Clinical Grading Specialization**: Semantic grading for student patient notes
+  - **Scoring Thresholds**: Semantic similarity ≥ 0.55, token overlap ≥ 0.35, combined ≥ 0.50
+  - **Safeguards**: Checked-only and student-content (anti-template) safeguards
+  - **See [GRADING_GUIDE.md](GRADING_GUIDE.md) for detailed clinical grading instructions**
 
 Each agent implements:
 - `process(user_input)`: Basic processing without history
@@ -202,8 +279,50 @@ Each agent implements:
 - Python 3.8+
 - Azure OpenAI resource with deployed model
 - Valid API key and endpoint
+- StreamLit 1.31.1+ (for web interface)
+- markitdown library (for document processing)
+
+## Supported Document Formats
+
+The StreamLit interface supports uploading and processing the following file types:
+- **PDF** (.pdf) - Portable Document Format
+- **Word** (.docx, .doc) - Microsoft Word documents  
+- **Excel** (.xlsx, .xls, .csv) - Spreadsheets and data files
+- **PowerPoint** (.pptx) - Presentations
+- **Text** (.txt, .md) - Plain text and Markdown files
+
+All uploaded documents are automatically converted to markdown and added to the agent's context, enabling intelligent responses based on document content.
 
 ## Advanced Features
+
+### StreamLit Debugging Tools (Google APK-style)
+
+The web interface includes professional debugging tools inspired by Google APK:
+
+**Variable Viewer**
+- Real-time inspection of session state variables
+- Message count tracking
+- Document load status
+- Token usage monitoring
+- Agent initialization status
+
+**Request History**
+- Detailed logs of all requests and responses
+- JSON-formatted request/response data
+- Timestamp tracking
+- Token usage per request
+- Response time metrics
+
+**Agent State Inspector**
+- Real-time agent status monitoring
+- Specialized agent health checks
+- Data manager status
+- System configuration display
+
+**Session Export**
+- Export complete session data to JSON
+- Includes conversation history, uploaded documents, and metrics
+- Useful for debugging and analysis
 
 ### Conversation History Management
 - **Rolling Window**: Keeps last 20 messages (configurable via `max_messages`)
