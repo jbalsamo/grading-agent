@@ -1,25 +1,35 @@
-# Master Agent System Examples
+# Examples
 
-This directory contains example scripts demonstrating various features and capabilities of the Master Agent System.
+This directory contains example scripts demonstrating different use cases of the grading agent system.
 
-## Available Examples
+## 🆕 Streaming Examples
 
-### 1. `batch_processing.py`
-Demonstrates how to process multiple requests programmatically using the Master Agent System.
+### 1. Streaming Demo (`streaming_demo.py`) ⭐ NEW
+Comprehensive demonstration of real-time streaming capabilities:
+- Basic streaming with visual feedback
+- Streaming with progress tracking
+- Streaming cancellation
+- Blocking vs streaming comparison
 
-**Features:**
-- Batch processing of different request types
-- Performance timing and monitoring
-- Results export to JSON
-- Error handling and reporting
-
-**Usage:**
 ```bash
-python examples/batch_processing.py
+python examples/streaming_demo.py
 ```
 
-### 2. `agent_comparison.py`
-Compares how different specialized agents respond to the same query.
+### 2. Grading Workflow Demo (`grading_workflow_demo.py`) ⭐ NEW
+Multi-agent grading pipeline demonstration:
+- Automatic grading workflow (Grading → Formatting → Chat)
+- Visual progress tracking
+- Agent-by-agent comparison
+- FormattingAgent showcase with table generation
+
+```bash
+python examples/grading_workflow_demo.py
+```
+
+## Original Examples
+
+### 3. Agent Comparison (`agent_comparison.py`)
+Demonstrates the differences between specialized agents (Chat, Grading, Analysis) by showing how each agent responds to the same query differently.
 
 **Features:**
 - Side-by-side agent comparison

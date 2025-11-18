@@ -1,7 +1,7 @@
 """
 Grading Agent - Specialized for educational assessment and grading tasks.
 """
-from typing import Dict, Any, TYPE_CHECKING
+from typing import Dict, Any, TYPE_CHECKING, AsyncGenerator, Optional
 from langchain_openai import AzureChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from ..config import config
@@ -25,7 +25,7 @@ class GradingAgent:
         """Create Azure OpenAI LLM instance for grading."""
         return AzureChatOpenAI(
             **config.get_azure_openai_kwargs(),
-            temperature=config.agent_temperature,
+            temperature=1.0,  # Explicitly set to 1.0 as required by gpt-5 model
         )
     
     def process(self, user_input: str) -> str:
@@ -148,6 +148,88 @@ Always be fair, objective, and constructive in your assessments. Provide specifi
         except Exception as e:
             logger.error(f"Error in grading agent with history: {e}")
             return f"I apologize, but I encountered an error during grading assessment: {str(e)}"
+    
+    async def stream_process(
+        self,
+        user_input: str,
+        conversation_history: Optional['ConversationHistory'] = None
+    ) -> AsyncGenerator[str, None]:
+        """
+        Process grading with streaming output.
+        
+        Args:
+            user_input: Grading request
+            conversation_history: Optional conversation history
+            
+        Yields:
+            String chunks of the grading response
+        """
+        try:
+            # Use the same system message (PRESERVED from process_with_history)
+            system_message = """You are grading clinical student patient notes.
+
+The rubric items and their text are derived exactly from the rubric PDF.
+Exclusions: "NONE OF THE ABOVE" and "COMMENTS" are not scored or included in totals.
+
+Matching & Scoring Logic:
+- Use semantic and simile-aware matching (not just keyword or literal).
+- Match phrases even when meaning is equivalent (e.g., "shooting pain" ≈ "pain radiates down leg").
+- Count multiple rubric matches from a single phrase when appropriate.
+- Use these thresholds:
+  * semantic similarity ≥ 0.55
+  * token overlap ≥ 0.35
+  * combined ≥ 0.50
+
+Safeguards:
+- Checked-only safeguard: Count only rubric items actually marked/checked by the evaluator in the spreadsheet.
+- Student-content safeguard: Ignore rubric phrases that are identical or near-identical copies of the official rubric text (≥ 0.80 similarity).
+
+Output per Student:
+1. Header table:
+   | Section | AI Score | Human Score | Max | Δ |
+2. Itemized rubric list with ✓ / ✗ for each rubric line.
+3. Ignored or unscored phrases (due to safeguards).
+4. Brief narrative explaining differences (AI vs Human) and improvement feedback.
+
+Use templates where appropriate. If the data is not in a rubric or grade format, return an error and announce that it could not be processed.
+
+You have access to the conversation history, so you can reference previous grading sessions,
+maintain consistency across multiple student assessments, and build upon earlier feedback.
+Use this context to provide more coherent and consistent grading across all students.
+
+For general educational tasks:
+- Grading assignments, essays, and exams
+- Providing detailed feedback on student work
+- Creating rubrics and assessment criteria
+- Analyzing learning outcomes
+- Identifying areas for improvement
+- Maintaining consistency in grading standards
+
+Always be fair, objective, and constructive in your assessments. Provide specific examples and actionable feedback."""
+            
+            if conversation_history:
+                history_messages = conversation_history.get_langchain_messages()
+                all_messages = [
+                    SystemMessage(content=system_message)
+                ] + history_messages + [
+                    HumanMessage(content=user_input)
+                ]
+            else:
+                all_messages = [
+                    SystemMessage(content=system_message),
+                    HumanMessage(content=user_input)
+                ]
+            
+            # Stream response
+            async for chunk in self.llm.astream(all_messages):
+                if chunk.content:
+                    yield chunk.content
+            
+            logger.info("Grading agent completed streaming")
+            
+        except Exception as e:
+            logger.error(f"Error in grading agent streaming: {e}")
+            yield f"I apologize, but I encountered an error during grading: {str(e)}"
     
     def get_capabilities(self) -> Dict[str, Any]:
         """Get the capabilities of the grading agent."""

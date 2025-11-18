@@ -48,21 +48,21 @@ The Master Agent System is a sophisticated multi-agent architecture built on Azu
 
 ### Chat Agent
 - **Purpose**: General conversation and assistance
-- **Temperature**: 1.0 (creative responses)
+- **Temperature**: Configurable (default: 1.0)
 - **Specialization**: Conversational AI, explanations, general help
 - **Use Cases**: Q&A, creative writing, general assistance
 
 ### Analysis Agent  
 - **Purpose**: Data analysis and computational tasks
-- **Temperature**: 0.3 (precise analysis)
+- **Temperature**: Configurable (default: 1.0)
 - **Specialization**: Statistical analysis, data processing, research
 - **Use Cases**: Data interpretation, mathematical computations, research tasks
 
 ### Grading Agent
 - **Purpose**: Educational assessment and grading
-- **Temperature**: 0.2 (consistent evaluation)
-- **Specialization**: Educational assessment, feedback generation
-- **Use Cases**: Assignment grading, rubric creation, educational feedback
+- **Temperature**: Configurable (default: 1.0)
+- **Specialization**: Educational assessment, feedback generation, clinical note grading
+- **Use Cases**: Assignment grading, rubric creation, educational feedback, clinical student note evaluation
 
 ## 💾 Data Management Features
 

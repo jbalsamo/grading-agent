@@ -25,11 +25,11 @@ class CodeReviewAgent:
     def _create_llm(self) -> AzureChatOpenAI:
         """Create Azure OpenAI LLM instance for code review.
         
-        Note: Lower temperature for more consistent reviews.
+        Note: Using temperature=1.0 as required by gpt-5 model.
         """
         return AzureChatOpenAI(
             **config.get_azure_openai_kwargs(),
-            temperature=0.3,  # Lower for deterministic reviews
+            temperature=1.0,  # Explicitly set to 1.0 as required by gpt-5 model
         )
     
     def process(self, user_input: str) -> str:

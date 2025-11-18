@@ -33,6 +33,11 @@ class ConversationHistory:
         self.storage_file = storage_file
         self.messages: List[ChatMessage] = []
         
+        # Streaming support
+        self.streaming_chunks: List[str] = []
+        self.streaming_agent: Optional[str] = None
+        self.streaming_metadata: Dict[str, Any] = {}
+        
         # Ensure data directory exists
         os.makedirs(os.path.dirname(storage_file), exist_ok=True)
         
@@ -302,3 +307,110 @@ class ConversationHistory:
         except Exception as e:
             logger.error(f"Error deleting conversation history file: {e}")
             return False
+    
+    # ========== Streaming Support Methods ==========
+    
+    def start_streaming_message(self, agent_type: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Start a new streaming message.
+        
+        Args:
+            agent_type: The agent that will stream the message
+            metadata: Optional metadata for the streaming message
+        """
+        self.streaming_chunks = []
+        self.streaming_agent = agent_type
+        self.streaming_metadata = metadata or {}
+        logger.debug(f"Started streaming message for {agent_type}")
+    
+    def add_streaming_chunk(self, chunk: str) -> None:
+        """
+        Add a chunk to the current streaming message.
+        
+        Args:
+            chunk: Text chunk to add
+        """
+        self.streaming_chunks.append(chunk)
+    
+    def get_current_streaming_content(self) -> str:
+        """
+        Get the current accumulated streaming content.
+        
+        Returns:
+            Concatenated streaming chunks
+        """
+        return ''.join(self.streaming_chunks)
+    
+    def is_streaming(self) -> bool:
+        """
+        Check if currently streaming a message.
+        
+        Returns:
+            True if streaming is active
+        """
+        return len(self.streaming_chunks) > 0 or self.streaming_agent is not None
+    
+    def finalize_streaming_message(self) -> None:
+        """
+        Finalize the streaming message and add it to conversation history.
+        
+        Converts accumulated chunks into a complete message and adds
+        it to the conversation history.
+        """
+        if not self.streaming_chunks:
+            logger.warning("Attempted to finalize empty streaming message")
+            return
+        
+        # Combine all chunks into final content
+        content = ''.join(self.streaming_chunks)
+        
+        # Create the assistant message
+        message = ChatMessage(
+            role="assistant",
+            content=content,
+            timestamp=datetime.now(),
+            agent_type=self.streaming_agent or "unknown",
+            metadata={
+                **self.streaming_metadata,
+                'was_streamed': True,
+                'chunk_count': len(self.streaming_chunks)
+            }
+        )
+        
+        # Add to history
+        self._add_message(message)
+        
+        logger.info(
+            f"Finalized streaming message from {self.streaming_agent}: "
+            f"{len(self.streaming_chunks)} chunks, {len(content)} chars"
+        )
+        
+        # Clear streaming state
+        self.streaming_chunks = []
+        self.streaming_agent = None
+        self.streaming_metadata = {}
+    
+    def cancel_streaming_message(self) -> None:
+        """
+        Cancel the current streaming message without adding to history.
+        """
+        if self.is_streaming():
+            logger.info(f"Cancelled streaming message from {self.streaming_agent}")
+            self.streaming_chunks = []
+            self.streaming_agent = None
+            self.streaming_metadata = {}
+    
+    def get_streaming_stats(self) -> Dict[str, Any]:
+        """
+        Get statistics about current streaming message.
+        
+        Returns:
+            Dictionary with streaming stats
+        """
+        return {
+            'is_streaming': self.is_streaming(),
+            'agent': self.streaming_agent,
+            'chunk_count': len(self.streaming_chunks),
+            'total_chars': len(self.get_current_streaming_content()),
+            'metadata': self.streaming_metadata
+        }

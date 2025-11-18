@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from modules.master_agent import MasterAgent
 from modules.config import config
 from modules.security import InputValidationException, RateLimitException
+from modules.ui.streaming_components import AgentProgressIndicator
 
 # Parse command-line arguments
 def parse_args():
@@ -367,6 +368,14 @@ def initialize_session_state():
     including the master agent, conversation history, uploaded documents, and metrics.
     Debug mode is controlled by the -D/--debug CLI flag.
     """
+    # TEMPORARY: Force complete reinitialization on EVERY run to clear old agents
+    # This ensures no cached agents with temperature settings remain
+    # TODO: Remove this aggressive clearing once temperature issue is confirmed fixed
+    if 'agent' in st.session_state:
+        # Delete old agent to force fresh creation
+        del st.session_state['agent']
+        st.session_state.agent = None
+    
     if 'initialized' not in st.session_state:
         st.session_state.initialized = True
         st.session_state.messages = []
@@ -380,11 +389,17 @@ def initialize_session_state():
         st.session_state.request_history = []
         st.session_state.agent_state = {}
         
-    # Initialize agent if not exists
-    if st.session_state.agent is None:
+    # Initialize agent if not exists (use getattr to safely check)
+    if not hasattr(st.session_state, 'agent') or st.session_state.agent is None:
         try:
             with st.spinner("Initializing Azure OpenAI Master Agent..."):
-                st.session_state.agent = MasterAgent()
+                # Force reload of master_agent module to clear any cached code
+                import importlib
+                import modules.master_agent
+                importlib.reload(modules.master_agent)
+                from modules.master_agent import MasterAgent as ReloadedMasterAgent
+                
+                st.session_state.agent = ReloadedMasterAgent()
                 st.success("✅ Master Agent initialized successfully!")
         except Exception as e:
             st.error(f"❌ Failed to initialize agent: {e}")
@@ -439,6 +454,25 @@ def process_uploaded_file(uploaded_file) -> Optional[str]:
         st.error(f"Error converting {uploaded_file.name}: {e}")
         return None
 
+
+def force_clear_all_caches():
+    """Emergency function to completely clear all caches and force agent recreation."""
+    # Clear session state
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    
+    # Clear Python module cache for agents
+    import sys
+    modules_to_clear = [k for k in sys.modules.keys() if 'modules.agents' in k or 'modules.master_agent' in k]
+    for mod in modules_to_clear:
+        del sys.modules[mod]
+    
+    # Force garbage collection
+    import gc
+    gc.collect()
+    
+    st.success("✅ All caches cleared! Page will reload...")
+    st.rerun()
 
 def render_sidebar():
     """
@@ -586,6 +620,11 @@ def render_sidebar():
                     if st.session_state.agent:
                         st.session_state.agent.clear_conversation_history()
                     st.rerun()
+                
+                st.divider()
+                st.caption("⚠️ Emergency Tools")
+                if st.button("🔥 Force Clear All Caches", type="primary"):
+                    force_clear_all_caches()
 
 
 def export_session_data():
@@ -610,6 +649,80 @@ def export_session_data():
         json.dump(session_data, f, indent=2)
     
     st.success(f"✅ Session data exported to {export_path}")
+
+
+def stream_agent_response(user_input: str, document_context: str = ""):
+    """
+    Synchronous generator that yields text chunks from agent streaming response.
+    Wraps the async chat_streaming method to work with Streamlit's st.write_stream.
+    
+    Args:
+        user_input: The user's input message
+        document_context: Optional document context to prepend
+        
+    Yields:
+        Text chunks from the streaming response
+    """
+    current_agent = None
+    agent_start_time = {}
+    
+    try:
+        # Build full context if documents provided
+        if document_context:
+            context_prompt = f"{document_context}\n\n**User Question:**\n{user_input}"
+        else:
+            context_prompt = user_input
+        
+        # Create async generator
+        async_gen = st.session_state.agent.chat_streaming(context_prompt)
+        
+        # Convert async generator to sync by running in event loop
+        import asyncio
+        
+        # Get or create event loop
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        # Process streaming events
+        while True:
+            try:
+                # Get next event from async generator
+                event = loop.run_until_complete(async_gen.__anext__())
+                
+                event_type = event.get('type')
+                agent_name = event.get('agent', 'assistant')
+                
+                if event_type == 'status':
+                    # Track agent start
+                    if agent_name not in agent_start_time:
+                        agent_start_time[agent_name] = time.time()
+                        current_agent = agent_name
+                    
+                    # Show status updates
+                    if st.session_state.debug_enabled:
+                        yield f"\n\n🔄 **{agent_name}**: _{event['content']}_\n\n"
+                        
+                elif event_type == 'chunk':
+                    yield event['content']
+                    
+                elif event_type == 'complete':
+                    # Show completion message in debug mode
+                    if st.session_state.debug_enabled and agent_name in agent_start_time:
+                        duration = time.time() - agent_start_time[agent_name]
+                        yield f"\n\n✅ **{agent_name}** completed ({duration:.1f}s)\n\n"
+                        
+                elif event_type == 'error':
+                    yield f"\n\n❌ Error: {event['content']}\n"
+                    
+            except StopAsyncIteration:
+                # End of stream
+                break
+                
+    except Exception as e:
+        yield f"\n\n❌ Streaming error: {str(e)}\n"
 
 
 def render_debug_panel():
@@ -705,109 +818,98 @@ def render_main_chat():
         user_tokens = estimate_tokens(prompt)
         st.session_state.total_tokens += user_tokens
         
-        # Get agent response
+        # Get agent response with streaming
         with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                try:
-                    start_time = time.time()
-                    
-                    # Build document context if available
-                    document_context = ""
-                    document_info = []
-                    
-                    if st.session_state.document_markdown:
-                        context = "\n\n**Available Documents:**\n"
-                        for doc in st.session_state.document_markdown:
-                            # Use FULL document content (no truncation)
-                            doc_content = doc['content']
-                            context += f"\n### {doc['name']}\n{doc_content}\n"
-                            
-                            # Track document info for debug logging
-                            document_info.append({
-                                'name': doc['name'],
-                                'content_length': len(doc_content),
-                                'estimated_tokens': estimate_tokens(doc_content)
-                            })
+            try:
+                start_time = time.time()
+                
+                # Build document context if available
+                document_context = ""
+                document_info = []
+                
+                if st.session_state.document_markdown:
+                    context = "\n\n**Available Documents:**\n"
+                    for doc in st.session_state.document_markdown:
+                        # Use FULL document content (no truncation)
+                        doc_content = doc['content']
+                        context += f"\n### {doc['name']}\n{doc_content}\n"
                         
-                        document_context = context
-                        
-                        # Debug logging
-                        if st.session_state.debug_enabled:
-                            st.info(f"🔍 **Debug Info:** Including {len(st.session_state.document_markdown)} document(s) in context")
-                            for info in document_info:
-                                st.caption(f"📄 {info['name']}: {info['content_length']:,} chars, ~{info['estimated_tokens']:,} tokens")
+                        # Track document info for debug logging
+                        document_info.append({
+                            'name': doc['name'],
+                            'content_length': len(doc_content),
+                            'estimated_tokens': estimate_tokens(doc_content)
+                        })
                     
-                    # Call agent with document context handling
-                    # The agent will validate only the user prompt, then we add documents
-                    if document_context:
-                        # Build full context after validation
-                        context_prompt = f"{document_context}\n\n**User Question:**\n{prompt}"
-                        
-                        if st.session_state.debug_enabled:
-                            total_context_tokens = estimate_tokens(context_prompt)
-                            st.caption(f"📊 Total context size: {len(context_prompt):,} chars, ~{total_context_tokens:,} tokens")
-                        
-                        # Bypass validation for document-enhanced prompts by calling the LLM directly
-                        # This is safe because we validated the original prompt
-                        from modules.security import InputValidator
-                        validator = InputValidator()
-                        
-                        # Validate only the user's actual prompt
-                        validation_result = validator.validate_input(prompt)
-                        if not validation_result["valid"]:
-                            raise InputValidationException(validation_result["error"])
-                        
-                        # Now send the full context (bypassing the chat method's validation)
-                        # We'll call the agent's graph directly through a temporary method
-                        response = st.session_state.agent.chat(context_prompt)
-                    else:
-                        # No documents - use normal flow with validation
-                        response = st.session_state.agent.chat(prompt)
-                    response_time = time.time() - start_time
+                    document_context = context
                     
-                    # Display response with HTML support
-                    st.markdown(response, unsafe_allow_html=True)
+                    # Debug logging
+                    if st.session_state.debug_enabled:
+                        st.info(f"🔍 **Debug Info:** Including {len(st.session_state.document_markdown)} document(s) in context")
+                        for info in document_info:
+                            st.caption(f"📄 {info['name']}: {info['content_length']:,} chars, ~{info['estimated_tokens']:,} tokens")
+                
+                # Validate input before streaming
+                if document_context:
+                    context_prompt = f"{document_context}\n\n**User Question:**\n{prompt}"
                     
-                    # Update tokens
-                    response_tokens = estimate_tokens(response)
-                    st.session_state.total_tokens += response_tokens
+                    if st.session_state.debug_enabled:
+                        total_context_tokens = estimate_tokens(context_prompt)
+                        st.caption(f"📊 Total context size: {len(context_prompt):,} chars, ~{total_context_tokens:,} tokens")
                     
-                    # Store message with metadata
-                    message_data = {
-                        "role": "assistant",
-                        "content": response,
-                        "metadata": {
-                            "response_time": response_time,
-                            "tokens": response_tokens,
-                            "timestamp": datetime.now().isoformat()
-                        }
-                    }
-                    st.session_state.messages.append(message_data)
-                    
-                    # Log request with document context info
-                    request_log = {
-                        "user_input": prompt,
-                        "response": response,
+                    # Validate only the user's actual prompt
+                    from modules.security import InputValidator
+                    validator = InputValidator()
+                    validation_result = validator.validate_input(prompt)
+                    if not validation_result["valid"]:
+                        raise InputValidationException(validation_result["error"])
+                
+                # Stream the response using Streamlit's write_stream
+                response = st.write_stream(stream_agent_response(prompt, document_context))
+                response_time = time.time() - start_time
+                
+                # Update tokens
+                response_tokens = estimate_tokens(response)
+                st.session_state.total_tokens += response_tokens
+                
+                # Store message with metadata
+                message_data = {
+                    "role": "assistant",
+                    "content": response,
+                    "metadata": {
                         "response_time": response_time,
-                        "tokens": user_tokens + response_tokens,
-                        "timestamp": datetime.now().isoformat(),
-                        "documents_used": len(document_info) if document_info else 0,
-                        "document_details": document_info if document_info else None,
-                        "full_context_length": len(context_prompt),
-                        "full_context_tokens": estimate_tokens(context_prompt)
+                        "tokens": response_tokens,
+                        "timestamp": datetime.now().isoformat()
                     }
-                    st.session_state.request_history.append(request_log)
-                    
-                except InputValidationException as e:
-                    st.error(f"⚠️ Input validation error: {e}")
-                except RateLimitException as e:
-                    st.warning(f"⏱️ {e}")
-                except Exception as e:
-                    st.error(f"❌ Error: {e}")
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": f"I encountered an error: {e}"
-                    })
+                }
+                st.session_state.messages.append(message_data)
+                
+                # Log request with document context info
+                # Build context_prompt for logging
+                context_prompt = document_context + "\n\n**User Question:**\n" + prompt if document_context else prompt
+                request_log = {
+                    "user_input": prompt,
+                    "response": response,
+                    "response_time": response_time,
+                    "tokens": user_tokens + response_tokens,
+                    "timestamp": datetime.now().isoformat(),
+                    "documents_used": len(document_info) if document_info else 0,
+                    "document_details": document_info if document_info else None,
+                    "full_context_length": len(context_prompt),
+                    "full_context_tokens": estimate_tokens(context_prompt)
+                }
+                st.session_state.request_history.append(request_log)
+                
+            except InputValidationException as e:
+                st.error(f"⚠️ Input validation error: {e}")
+            except RateLimitException as e:
+                st.warning(f"⏱️ {e}")
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": f"I encountered an error: {e}"
+                })
 
 
 def main():

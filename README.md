@@ -7,6 +7,7 @@ A sophisticated multi-agent Python application that uses LangGraph and LangChain
 ## Features
 
 - 🌐 **StreamLit Web Interface**: Modern dark-themed web UI with Google APK-style debugging tools
+- ⚡ **Real-Time Streaming**: Streaming chat responses with instant visual feedback
 - 📄 **Document Upload & Processing**: Upload PDFs, DOCX, Excel, and more - automatically converted to markdown
 - 🔍 **Advanced Debugging Tools**: Variable viewer, request history, and agent state inspection
 - 📊 **Real-time Token Tracking**: Monitor token usage across documents and conversations
@@ -28,14 +29,21 @@ A sophisticated multi-agent Python application that uses LangGraph and LangChain
 grading-agent/
 ├── app.py                 # StreamLit web application
 ├── main.py                # CLI application entry point
-├── README.md              # Project overview
-├── GRADING_GUIDE.md       # Clinical grading instructions
+├── README.md              # Project overview (you are here)
 ├── requirements.txt       # Python dependencies
 ├── pytest.ini             # Pytest configuration
 ├── .env                   # Configuration (not in git)
 ├── .env.template          # Environment template
 ├── .gitignore            # Git ignore rules
 ├── run_app.sh             # StreamLit app launcher script
+│
+├── docs/                 # 📚 Documentation (see docs/INDEX.md)
+│   ├── INDEX.md          # Documentation index
+│   ├── GRADING_GUIDE.md  # Clinical grading instructions
+│   ├── GRADING_REPORT_FORMAT.md  # Grading report structure
+│   ├── STREAMING_IMPLEMENTATION.md  # Streaming features
+│   ├── TEMPERATURE_FIX.md  # Troubleshooting guide
+│   └── ... (see INDEX.md for full list)
 │
 ├── modules/              # Core application modules
 │   ├── __init__.py       # Module initialization
@@ -108,9 +116,24 @@ grading-agent/
    
    Optional configuration:
    ```
+   # Azure services
    AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-ada-002
    AZURE_COGNITIVE_SERVICES_KEY=your-cognitive-services-key
    AZURE_COGNITIVE_SERVICES_REGION=your-region
+   
+   # Agent behavior
+   AGENT_TEMPERATURE=1.0
+   MAX_CONVERSATION_MESSAGES=20
+   
+   # Performance & security
+   RATE_LIMIT_ENABLED=true
+   RATE_LIMIT_CALLS=10
+   RATE_LIMIT_PERIOD=60
+   ENABLE_RESPONSE_CACHE=true
+   CACHE_TTL=300
+   MAX_INPUT_LENGTH=500000
+   
+   # Monitoring
    LANGCHAIN_TRACING_V2=true
    LANGCHAIN_API_KEY=your-langsmith-api-key
    LANGCHAIN_PROJECT=azure-agent-notebook
@@ -237,7 +260,7 @@ All agents support both standard processing and conversation history:
   - **Clinical Grading Specialization**: Semantic grading for student patient notes
   - **Scoring Thresholds**: Semantic similarity ≥ 0.55, token overlap ≥ 0.35, combined ≥ 0.50
   - **Safeguards**: Checked-only and student-content (anti-template) safeguards
-  - **See [GRADING_GUIDE.md](GRADING_GUIDE.md) for detailed clinical grading instructions**
+  - **See [GRADING_GUIDE.md](docs/GRADING_GUIDE.md) for detailed clinical grading instructions**
 
 Each agent implements:
 - `process(user_input)`: Basic processing without history
@@ -358,3 +381,17 @@ The system includes comprehensive error handling for:
 - **Agent Failures**: Graceful fallback when specialized agents encounter errors
 - **Data Management**: Robust storage and retrieval error handling
 - **Network Issues**: Automatic retry and error reporting
+
+## 📚 Documentation
+
+Complete documentation is available in the [`docs/`](docs/) folder:
+
+- **[Documentation Index](docs/INDEX.md)** - Complete list of all documentation
+- **[Grading Guide](docs/GRADING_GUIDE.md)** - Clinical grading instructions
+- **[Grading Report Format](docs/GRADING_REPORT_FORMAT.md)** - Report structure and examples
+- **[Streaming Implementation](docs/STREAMING_IMPLEMENTATION.md)** - Real-time streaming features
+- **[Temperature Fix](docs/TEMPERATURE_FIX.md)** - Troubleshooting temperature parameter errors
+- **[Usage Guide](docs/USAGE.md)** - How to use the system
+- **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - Development guidelines
+
+For a complete list of all documentation, see **[docs/INDEX.md](docs/INDEX.md)**.

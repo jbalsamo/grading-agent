@@ -1,7 +1,7 @@
 """
 Master Agent Controller for managing multiple specialized agents and data management.
 """
-from typing import Dict, Any, TypedDict, List, Optional
+from typing import Dict, Any, List, Optional
 from langchain_openai import AzureChatOpenAI
 from langgraph.graph import StateGraph, END
 from .config import config
@@ -10,6 +10,7 @@ from .conversation_history import ConversationHistory
 from .security import InputValidator, RateLimiter, InputValidationException, RateLimitException
 from .performance import ResponseCache, TokenOptimizer, PerformanceMonitor
 from .monitoring import metrics_collector
+from .state_definitions import GradingWorkflowState, MasterAgentState
 import logging
 import json
 import time
@@ -18,32 +19,8 @@ import time
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class MasterAgentState(TypedDict):
-    """State definition for the master agent.
-    
-    This TypedDict defines the state structure used throughout the LangGraph workflow.
-    It tracks all information needed for processing user requests through the multi-agent system.
-    
-    Attributes:
-        messages: List of chat messages in LangChain format
-        user_input: The original user input string
-        response: The final synthesized response
-        error: Any error message encountered during processing
-        agent_type: Type of agent handling the request (chat, analysis, grading, code_review)
-        task_classification: Classification result from the task classifier
-        agent_responses: Dictionary mapping agent names to their responses
-        data_context: Contextual data retrieved from the data manager
-        conversation_history: List of previous conversation messages
-    """
-    messages: list
-    user_input: str
-    response: str
-    error: str
-    agent_type: str
-    task_classification: str
-    agent_responses: dict
-    data_context: dict
-    conversation_history: list
+# MasterAgentState is now imported from state_definitions
+# It is an alias for GradingWorkflowState, maintaining backward compatibility
 
 class MasterAgent:
     """Master Agent Controller for managing specialized agents and data.
@@ -122,7 +99,7 @@ class MasterAgent:
         try:
             llm = AzureChatOpenAI(
                 **config.get_azure_openai_kwargs(),
-                temperature=1.0,
+                temperature=1.0,  # Explicitly set to 1.0 as required by gpt-5 model
             )
             logger.info(f"Master Agent initialized with Azure OpenAI deployment: {config.chat_deployment}")
             return llm
@@ -137,7 +114,7 @@ class MasterAgent:
         - ChatAgent: General conversation and questions
         - AnalysisAgent: Data analysis and computational tasks
         - GradingAgent: Educational assessment and grading
-        - CodeReviewAgent: Code review and quality analysis
+        - FormattingAgent: Spreadsheet formatting for grading results (NEW)
         
         Also initializes the DataManager for persistent storage.
         
@@ -145,20 +122,37 @@ class MasterAgent:
         available agents only.
         """
         try:
+            # Force reload of agent modules to clear any cached code with old temperature settings
+            import importlib
+            import sys
+            
+            # Reload agent modules if they're already imported
+            agent_modules = [
+                'modules.agents.chat_agent',
+                'modules.agents.analysis_agent', 
+                'modules.agents.grading_agent',
+                'modules.agents.formatting_agent'
+            ]
+            for module_name in agent_modules:
+                if module_name in sys.modules:
+                    importlib.reload(sys.modules[module_name])
+            
             # Import and initialize specialized agents
             from .agents.chat_agent import ChatAgent
             from .agents.analysis_agent import AnalysisAgent
             from .agents.grading_agent import GradingAgent
+            from .agents.formatting_agent import FormattingAgent
             from .data_manager import DataManager
             
             self.specialized_agents = {
                 "chat": ChatAgent(),
                 "analysis": AnalysisAgent(),
-                "grading": GradingAgent()
+                "grading": GradingAgent(),
+                "formatting": FormattingAgent()  # NEW: Formatting agent for grading workflow
             }
             
             self.data_manager = DataManager()
-            logger.info("Specialized agents and data manager initialized successfully")
+            logger.info("Specialized agents and data manager initialized successfully (including FormattingAgent)")
             
         except ImportError as e:
             logger.warning(f"Some specialized agents not available: {e}")
@@ -170,11 +164,19 @@ class MasterAgent:
         """Create the LangGraph workflow for the master agent.
         
         Builds a LangGraph state machine with the following nodes:
+        
+        STANDARD WORKFLOW:
         - classify_task: Classify user request into task type
         - route_to_agent: Route to appropriate specialized agent
         - manage_data: Store interaction and retrieve context
         - synthesize_response: Combine agent response with context
         - handle_error: Handle any errors in the workflow
+        
+        GRADING WORKFLOW (NEW):
+        - grading_workflow_entry: Initialize grading workflow
+        - route_to_grading: Execute grading agent
+        - route_to_formatting: Format grading results as spreadsheet
+        - route_to_chat_notes: Optional additional notes
         
         The workflow uses conditional edges to handle different paths
         based on task classification and error states.
@@ -184,26 +186,34 @@ class MasterAgent:
         """
         workflow = StateGraph(MasterAgentState)
         
-        # Add nodes
+        # Add standard workflow nodes
         workflow.add_node("classify_task", self._classify_task)
         workflow.add_node("route_to_agent", self._route_to_agent)
         workflow.add_node("manage_data", self._manage_data)
         workflow.add_node("synthesize_response", self._synthesize_response)
         workflow.add_node("handle_error", self._handle_error)
         
+        # Add grading workflow nodes (NEW)
+        workflow.add_node("grading_workflow_entry", self._grading_workflow_entry)
+        workflow.add_node("route_to_grading", self._route_to_grading)
+        workflow.add_node("route_to_formatting", self._route_to_formatting)
+        workflow.add_node("route_to_chat_notes", self._route_to_chat_notes)
+        
         # Set entry point
         workflow.set_entry_point("classify_task")
         
-        # Add edges
+        # Add conditional edge after classification to choose workflow path
         workflow.add_conditional_edges(
             "classify_task",
-            self._should_continue_classification,
+            self._should_use_grading_workflow,
             {
-                "route": "route_to_agent",
+                "grading_workflow": "grading_workflow_entry",
+                "standard_workflow": "route_to_agent",
                 "error": "handle_error"
             }
         )
         
+        # Standard workflow edges
         workflow.add_conditional_edges(
             "route_to_agent",
             self._should_manage_data,
@@ -216,6 +226,14 @@ class MasterAgent:
         
         workflow.add_edge("manage_data", "synthesize_response")
         workflow.add_edge("synthesize_response", END)
+        
+        # Grading workflow edges (NEW)
+        workflow.add_edge("grading_workflow_entry", "route_to_grading")
+        workflow.add_edge("route_to_grading", "route_to_formatting")
+        workflow.add_edge("route_to_formatting", "route_to_chat_notes")
+        workflow.add_edge("route_to_chat_notes", "manage_data")  # Connect back to data management
+        
+        # Error handling
         workflow.add_edge("handle_error", END)
         
         return workflow.compile()
@@ -445,6 +463,202 @@ class MasterAgent:
         logger.error(f"Handled error: {error_msg}")
         return state
     
+    # ========== NEW GRADING WORKFLOW NODES ==========
+    
+    def _grading_workflow_entry(self, state: MasterAgentState) -> MasterAgentState:
+        """
+        Entry point for grading-specific workflow.
+        
+        Initializes the grading workflow with proper state setup.
+        Workflow: Grading → Formatting → (optional) Chat
+        
+        Args:
+            state: Current agent state
+            
+        Returns:
+            Updated state ready for grading workflow
+        """
+        try:
+            logger.info("Entering grading workflow")
+            
+            # Track workflow path
+            if 'workflow_path' not in state:
+                state['workflow_path'] = []
+            state['workflow_path'].append('grading_workflow_entry')
+            
+            # Initialize grading-specific fields
+            state['current_agent'] = 'grading'
+            state['grading_results'] = {}
+            state['formatted_output'] = ''
+            state['additional_notes'] = ''
+            
+            logger.info("Grading workflow initialized successfully")
+            return state
+            
+        except Exception as e:
+            state["error"] = f"Error entering grading workflow: {str(e)}"
+            logger.error(f"Error in _grading_workflow_entry: {e}")
+            return state
+    
+    def _route_to_grading(self, state: MasterAgentState) -> MasterAgentState:
+        """
+        Route to grading agent for evaluation.
+        
+        Args:
+            state: Current agent state
+            
+        Returns:
+            Updated state with grading results
+        """
+        try:
+            logger.info("Routing to grading agent")
+            state['workflow_path'].append('route_to_grading')
+            state['current_agent'] = 'grading'
+            
+            user_input = state.get("user_input", "")
+            
+            # Get grading agent
+            grading_agent = self.specialized_agents.get("grading")
+            
+            if not grading_agent:
+                state["error"] = "Grading agent not available"
+                return state
+            
+            # Process with history if available
+            if hasattr(grading_agent, 'process_with_history'):
+                response = grading_agent.process_with_history(user_input, self.conversation_history)
+            else:
+                response = grading_agent.process(user_input)
+            
+            # Store grading results
+            state['grading_results'] = {'raw_output': response}
+            state['agent_responses']['grading'] = response
+            
+            logger.info("Grading agent completed successfully")
+            return state
+            
+        except Exception as e:
+            state["error"] = f"Error in grading agent: {str(e)}"
+            logger.error(f"Error in _route_to_grading: {e}")
+            return state
+    
+    def _route_to_formatting(self, state: MasterAgentState) -> MasterAgentState:
+        """
+        Route to formatting agent for spreadsheet generation.
+        
+        Args:
+            state: Current agent state with grading results
+            
+        Returns:
+            Updated state with formatted output
+        """
+        try:
+            logger.info("Routing to formatting agent")
+            state['workflow_path'].append('route_to_formatting')
+            state['current_agent'] = 'formatting'
+            
+            # Get grading results to format
+            grading_output = state.get('agent_responses', {}).get('grading', '')
+            
+            # Get formatting agent
+            formatting_agent = self.specialized_agents.get("formatting")
+            
+            if not formatting_agent:
+                # Fallback: use raw grading output
+                state['formatted_output'] = grading_output
+                logger.warning("Formatting agent not available, using raw output")
+                return state
+            
+            # Format the grading results
+            formatted_output = formatting_agent.format_grading_results(grading_output)
+            
+            # Store formatted output
+            state['formatted_output'] = formatted_output
+            state['agent_responses']['formatting'] = formatted_output
+            
+            logger.info("Formatting agent completed successfully")
+            return state
+            
+        except Exception as e:
+            state["error"] = f"Error in formatting agent: {str(e)}"
+            logger.error(f"Error in _route_to_formatting: {e}")
+            return state
+    
+    def _route_to_chat_notes(self, state: MasterAgentState) -> MasterAgentState:
+        """
+        Optional: Route to chat agent for additional notes.
+        
+        Allows adding contextual notes or explanations after grading and formatting.
+        
+        Args:
+            state: Current agent state
+            
+        Returns:
+            Updated state with optional additional notes
+        """
+        try:
+            logger.info("Routing to chat agent for optional notes")
+            state['workflow_path'].append('route_to_chat_notes')
+            state['current_agent'] = 'chat'
+            
+            # Check if user requested additional notes
+            user_input = state.get("user_input", "").lower()
+            
+            # Only add notes if explicitly requested
+            if any(keyword in user_input for keyword in ['explain', 'notes', 'clarify', 'details']):
+                chat_agent = self.specialized_agents.get("chat")
+                
+                if chat_agent:
+                    # Create context-aware prompt
+                    notes_prompt = f"Based on this grading result, provide brief additional notes:\n{state.get('formatted_output', '')}"
+                    
+                    if hasattr(chat_agent, 'process_with_history'):
+                        notes = chat_agent.process_with_history(notes_prompt, self.conversation_history)
+                    else:
+                        notes = chat_agent.process(notes_prompt)
+                    
+                    state['additional_notes'] = notes
+                    state['agent_responses']['chat'] = notes
+                    
+                    logger.info("Chat agent added additional notes")
+                else:
+                    logger.info("Chat agent not available for notes")
+            else:
+                logger.info("No additional notes requested")
+            
+            return state
+            
+        except Exception as e:
+            # Non-critical error - continue without notes
+            logger.warning(f"Error adding notes (non-critical): {e}")
+            state['additional_notes'] = ''
+            return state
+    
+    # ========== CONDITIONAL EDGES ==========
+    
+    def _should_use_grading_workflow(self, state: MasterAgentState) -> str:
+        """
+        Determine whether to use grading workflow or standard workflow.
+        
+        Args:
+            state: Current agent state
+            
+        Returns:
+            'grading_workflow', 'standard_workflow', or 'error'
+        """
+        if state.get("error"):
+            return "error"
+        
+        agent_type = state.get("agent_type", "")
+        
+        # Use grading workflow for grading tasks
+        if agent_type == "grading":
+            logger.info("Routing to grading workflow")
+            return "grading_workflow"
+        else:
+            logger.info(f"Routing to standard workflow for {agent_type}")
+            return "standard_workflow"
+    
     def _should_continue_classification(self, state: MasterAgentState) -> str:
         """Determine whether to continue after classification.
         
@@ -586,6 +800,161 @@ class MasterAgent:
             
             logger.error(f"Error in chat method: {e}")
             return error_response
+    
+    async def chat_streaming(self, user_input: str, session_id: str = "default"):
+        """
+        Streaming chat method for real-time agent responses.
+        
+        Yields chunks of agent responses as they are generated, providing
+        real-time feedback to the user. Supports both single-agent and
+        multi-agent grading workflows.
+        
+        Args:
+            user_input: The user's input message
+            session_id: Session identifier for rate limiting
+            
+        Yields:
+            Dict with event type and content:
+                - {'type': 'status', 'content': str, 'agent': str}
+                - {'type': 'chunk', 'content': str, 'agent': str}
+                - {'type': 'complete', 'content': str, 'agent': str}
+                - {'type': 'error', 'content': str}
+        
+        Example:
+            async for event in agent.chat_streaming("Grade this assignment"):
+                if event['type'] == 'chunk':
+                    print(event['content'], end='')
+        """
+        from .streaming import StreamingManager
+        
+        start_time = time.time()
+        agent_type = "unknown"
+        streaming_manager = StreamingManager()
+        
+        try:
+            # Step 1: Validate input
+            validation_result = self.input_validator.validate_input(user_input)
+            if not validation_result["valid"]:
+                yield {'type': 'error', 'content': validation_result["error"]}
+                return
+            
+            user_input = self.input_validator.sanitize_input(user_input)
+            
+            # Step 2: Check rate limit
+            rate_check = self.rate_limiter.check_rate_limit(session_id)
+            if not rate_check["allowed"]:
+                yield {
+                    'type': 'error',
+                    'content': f"Rate limit exceeded. Retry in {rate_check['retry_after']}s"
+                }
+                return
+            
+            # Step 3: Add user message to history
+            self.conversation_history.add_user_message(user_input)
+            
+            # Step 4: Classify task
+            yield {'type': 'status', 'content': 'Classifying request...', 'agent': 'master'}
+            
+            # Simple classification (can enhance with LLM if needed)
+            user_lower = user_input.lower()
+            if any(keyword in user_lower for keyword in ['grade', 'grading', 'score', 'rubric', 'assessment']):
+                agent_type = 'grading'
+                workflow_type = 'grading_workflow'
+            elif any(keyword in user_lower for keyword in ['analyze', 'analysis', 'data', 'statistics']):
+                agent_type = 'analysis'
+                workflow_type = 'single_agent'
+            else:
+                agent_type = 'chat'
+                workflow_type = 'single_agent'
+            
+            logger.info(f"Classified as {agent_type}, workflow: {workflow_type}")
+            
+            # Step 5: Start streaming message in history
+            self.conversation_history.start_streaming_message(agent_type)
+            
+            # Step 6: Execute workflow with streaming
+            full_response = ""
+            
+            if workflow_type == 'grading_workflow':
+                # Multi-agent grading workflow
+                yield {'type': 'status', 'content': 'Starting grading workflow...', 'agent': 'master'}
+                
+                # 6a: Grading Agent
+                yield {'type': 'status', 'content': 'Analyzing with grading agent...', 'agent': 'grading'}
+                
+                grading_agent = self.specialized_agents.get('grading')
+                if grading_agent and hasattr(grading_agent, 'stream_process'):
+                    grading_output = ""
+                    async for chunk in grading_agent.stream_process(user_input, self.conversation_history):
+                        grading_output += chunk
+                        yield {'type': 'chunk', 'content': chunk, 'agent': 'grading'}
+                        self.conversation_history.add_streaming_chunk(chunk)
+                    
+                    yield {'type': 'complete', 'content': '', 'agent': 'grading'}
+                else:
+                    # Fallback to non-streaming
+                    grading_output = grading_agent.process_with_history(user_input, self.conversation_history)
+                    yield {'type': 'chunk', 'content': grading_output, 'agent': 'grading'}
+                
+                # 6b: Formatting Agent
+                yield {'type': 'status', 'content': 'Formatting results...', 'agent': 'formatting'}
+                
+                formatting_agent = self.specialized_agents.get('formatting')
+                if formatting_agent and hasattr(formatting_agent, 'stream_process'):
+                    formatted_output = ""
+                    async for chunk in formatting_agent.stream_process(grading_output):
+                        formatted_output += chunk
+                        yield {'type': 'chunk', 'content': chunk, 'agent': 'formatting'}
+                        self.conversation_history.add_streaming_chunk(chunk)
+                    
+                    yield {'type': 'complete', 'content': '', 'agent': 'formatting'}
+                    full_response = formatted_output
+                else:
+                    # Fallback
+                    formatted_output = formatting_agent.format_grading_results(grading_output) if formatting_agent else grading_output
+                    yield {'type': 'chunk', 'content': formatted_output, 'agent': 'formatting'}
+                    full_response = formatted_output
+                
+            else:
+                # Single agent workflow
+                agent = self.specialized_agents.get(agent_type)
+                
+                if agent and hasattr(agent, 'stream_process'):
+                    yield {'type': 'status', 'content': f'Processing with {agent_type} agent...', 'agent': agent_type}
+                    
+                    async for chunk in agent.stream_process(user_input, self.conversation_history):
+                        full_response += chunk
+                        yield {'type': 'chunk', 'content': chunk, 'agent': agent_type}
+                        self.conversation_history.add_streaming_chunk(chunk)
+                    
+                    yield {'type': 'complete', 'content': '', 'agent': agent_type}
+                else:
+                    # Fallback to non-streaming
+                    response = agent.process_with_history(user_input, self.conversation_history) if agent else "Agent not available"
+                    full_response = response
+                    yield {'type': 'chunk', 'content': response, 'agent': agent_type}
+            
+            # Step 7: Finalize streaming message
+            self.conversation_history.finalize_streaming_message()
+            
+            # Step 8: Track performance
+            response_time = time.time() - start_time
+            self.monitor.log_request(agent_type, response_time, success=True)
+            metrics_collector.record_request(agent_type, response_time, success=True)
+            
+            logger.info(f"Streaming completed in {response_time:.2f}s")
+            
+        except Exception as e:
+            logger.error(f"Error in chat_streaming: {e}")
+            yield {'type': 'error', 'content': f"Error: {str(e)}"}
+            
+            # Cancel streaming in history
+            self.conversation_history.cancel_streaming_message()
+            
+            # Track error
+            response_time = time.time() - start_time
+            self.monitor.log_request(agent_type, response_time, success=False)
+            metrics_collector.record_request(agent_type, response_time, success=False, error=str(e))
     
     def get_info(self) -> Dict[str, Any]:
         """Get information about the master agent configuration.

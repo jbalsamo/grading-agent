@@ -20,13 +20,19 @@ grading-agent/
 │   ├── conversation_history.py  # Chat history management
 │   ├── data_manager.py   # Data storage and retrieval
 │   ├── config.py         # Configuration management
+│   ├── security.py       # Input validation and rate limiting
+│   ├── performance.py    # Response caching and token optimization
+│   ├── monitoring.py     # Metrics collection and alerting
 │   ├── utils.py          # Utility functions
 │   ├── validate_config.py # Configuration validation
 │   └── agents/           # Specialized agents
 │       ├── __init__.py
-│       ├── chat_agent.py      # General conversation agent
-│       ├── analysis_agent.py  # Data analysis agent
-│       └── grading_agent.py   # Educational grading agent
+│       ├── chat_agent.py        # General conversation agent
+│       ├── analysis_agent.py    # Data analysis agent
+│       ├── grading_agent.py     # Educational grading agent
+│       ├── code_review_agent.py # Code review agent
+│       ├── category_agent.py    # Category classification agent
+│       └── grading_prompts.py   # Clinical grading templates
 │
 ├── tests/                # Test suite
 │   ├── README.md                     # Testing documentation
@@ -71,6 +77,9 @@ All core application logic is contained in the `modules/` package:
 - `conversation_history.py` - Manages chat history with persistence
 - `data_manager.py` - Handles data storage and context retrieval
 - `config.py` - Configuration management from environment variables
+- `security.py` - Input validation, sanitization, and rate limiting
+- `performance.py` - Response caching and token usage optimization
+- `monitoring.py` - Metrics collection, export, and alerting
 - `utils.py` - System monitoring and health checking utilities
 - `validate_config.py` - Configuration validation
 
@@ -78,6 +87,9 @@ All core application logic is contained in the `modules/` package:
 - `chat_agent.py` - General conversation and Q&A
 - `analysis_agent.py` - Data analysis and computational tasks
 - `grading_agent.py` - Educational assessment and grading
+- `code_review_agent.py` - Code review and quality analysis
+- `category_agent.py` - Task categorization
+- `grading_prompts.py` - Clinical grading prompt templates
 
 ### Tests (`tests/`)
 
@@ -182,12 +194,19 @@ python examples/batch_processing.py
 - **`conversation_history.py`** - Message storage, persistence, context retrieval
 - **`data_manager.py`** - Interaction logging, context search, analytics
 - **`config.py`** - Environment configuration, Azure OpenAI settings
+- **`security.py`** - Input validation, sanitization, rate limiting
+- **`performance.py`** - Response caching, token optimization
+- **`monitoring.py`** - Metrics collection, export, alerting
 - **`utils.py`** - System monitoring, health checks, statistics
+- **`validate_config.py`** - Configuration validation script
 
 ### Agents
 - **`chat_agent.py`** - General conversation, Q&A, explanations
 - **`analysis_agent.py`** - Data analysis, code generation, research
-- **`grading_agent.py`** - Educational assessment, feedback, rubrics
+- **`grading_agent.py`** - Educational assessment, feedback, rubrics, clinical grading
+- **`code_review_agent.py`** - Code review, quality analysis, security checks
+- **`category_agent.py`** - Task categorization and routing
+- **`grading_prompts.py`** - Clinical grading prompt templates
 
 ## Data Flow
 

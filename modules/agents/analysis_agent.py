@@ -1,7 +1,7 @@
 """
 Analysis Agent - Specialized for data analysis and computational tasks.
 """
-from typing import Dict, Any, TYPE_CHECKING
+from typing import Dict, Any, TYPE_CHECKING, AsyncGenerator, Optional
 from langchain_openai import AzureChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from ..config import config
@@ -25,7 +25,7 @@ class AnalysisAgent:
         """Create Azure OpenAI LLM instance for analysis."""
         return AzureChatOpenAI(
             **config.get_azure_openai_kwargs(),
-            temperature=config.agent_temperature,
+            temperature=1.0,  # Explicitly set to 1.0 as required by gpt-5 model
         )
     
     def process(self, user_input: str) -> str:
@@ -101,6 +101,65 @@ class AnalysisAgent:
         except Exception as e:
             logger.error(f"Error in analysis agent with history: {e}")
             return f"I apologize, but I encountered an error during analysis: {str(e)}"
+    
+    async def stream_process(
+        self,
+        user_input: str,
+        conversation_history: Optional['ConversationHistory'] = None
+    ) -> AsyncGenerator[str, None]:
+        """
+        Process analysis with streaming output.
+        
+        Args:
+            user_input: Analysis request
+            conversation_history: Optional conversation history
+            
+        Yields:
+            String chunks of the analysis response
+        """
+        try:
+            # Use the same system message (PRESERVED from process_with_history)
+            system_message = """You are a specialized data analysis and computational AI assistant.
+You excel at:
+- Data analysis and interpretation
+- Statistical analysis and insights
+- Code generation for data processing
+- Mathematical computations
+- File processing and data extraction
+- Visualization recommendations
+- Pattern recognition in data
+
+You have access to the conversation history, so you can reference previous 
+analyses, build upon earlier work, and maintain context throughout complex 
+analytical tasks. Use this context to provide more coherent and connected 
+analytical insights.
+
+Provide detailed, accurate, and methodical responses. Include step-by-step approaches
+when appropriate and suggest specific tools or methods for complex tasks."""
+            
+            if conversation_history:
+                history_messages = conversation_history.get_langchain_messages()
+                all_messages = [
+                    SystemMessage(content=system_message)
+                ] + history_messages + [
+                    HumanMessage(content=user_input)
+                ]
+            else:
+                all_messages = [
+                    SystemMessage(content=system_message),
+                    HumanMessage(content=user_input)
+                ]
+            
+            # Stream response
+            async for chunk in self.llm.astream(all_messages):
+                if chunk.content:
+                    yield chunk.content
+            
+            logger.info("Analysis agent completed streaming")
+            
+        except Exception as e:
+            logger.error(f"Error in analysis agent streaming: {e}")
+            yield f"I apologize, but I encountered an error during analysis: {str(e)}"
     
     def get_capabilities(self) -> Dict[str, Any]:
         """Get the capabilities of the analysis agent."""

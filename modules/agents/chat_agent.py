@@ -1,7 +1,7 @@
 """
-Chat Agent - Specialized for general conversation and assistance.
+Chat Agent - Specialized for general conversation and user assistance.
 """
-from typing import Dict, Any, TYPE_CHECKING
+from typing import Dict, Any, TYPE_CHECKING, AsyncGenerator, Optional
 from langchain_openai import AzureChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from ..config import config
@@ -25,7 +25,7 @@ class ChatAgent:
         """Create Azure OpenAI LLM instance for chat."""
         return AzureChatOpenAI(
             **config.get_azure_openai_kwargs(),
-            temperature=config.agent_temperature,
+            temperature=1.0,  # Explicitly set to 1.0 as required by gpt-5 model
         )
     
     def process(self, user_input: str) -> str:
@@ -83,6 +83,59 @@ class ChatAgent:
         except Exception as e:
             logger.error(f"Error in chat agent with history: {e}")
             return f"I apologize, but I encountered an error while processing your request: {str(e)}"
+    
+    async def stream_process(
+        self,
+        user_input: str,
+        conversation_history: Optional['ConversationHistory'] = None
+    ) -> AsyncGenerator[str, None]:
+        """
+        Process chat with streaming output.
+        
+        Args:
+            user_input: User's message
+            conversation_history: Optional conversation history
+            
+        Yields:
+            String chunks of the response
+        """
+        try:
+            system_message = """You are a helpful and friendly AI assistant.
+You excel at general conversation, answering questions, providing explanations,
+and helping users with various tasks. Be conversational, helpful, and engaging."""
+            
+            if conversation_history:
+                system_message += """
+
+You have access to the conversation history, so you can reference previous
+messages and maintain context throughout the conversation. Use this context
+to provide more relevant and personalized responses."""
+                
+                # Get history messages
+                history_messages = conversation_history.get_langchain_messages()
+                
+                # Build message list
+                all_messages = [
+                    SystemMessage(content=system_message)
+                ] + history_messages + [
+                    HumanMessage(content=user_input)
+                ]
+            else:
+                all_messages = [
+                    SystemMessage(content=system_message),
+                    HumanMessage(content=user_input)
+                ]
+            
+            # Stream response
+            async for chunk in self.llm.astream(all_messages):
+                if chunk.content:
+                    yield chunk.content
+            
+            logger.info("Chat agent completed streaming")
+            
+        except Exception as e:
+            logger.error(f"Error in chat agent streaming: {e}")
+            yield f"I apologize, but I encountered an error: {str(e)}"
     
     def get_capabilities(self) -> Dict[str, Any]:
         """Get the capabilities of the chat agent."""

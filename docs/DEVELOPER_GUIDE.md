@@ -2,16 +2,22 @@
 
 > A comprehensive guide for intermediate to advanced developers on understanding, extending, and building with the grading-agent multi-agent system.
 
+> 🆕 **UPDATED:** Now includes streaming capabilities and multi-agent grading workflow!  
+> See [Streaming Architecture](#streaming-architecture) and [FormattingAgent](#formattingagent) sections for new features.
+
 ## Table of Contents
 1. [Introduction & Architecture Overview](#introduction--architecture-overview)
-2. [Understanding the Agent System](#understanding-the-agent-system)
-3. [How Agents Work](#how-agents-work)
-4. [Adding New Agents](#adding-new-agents)
-5. [Tools & Utilities You Can Add](#tools--utilities-you-can-add)
-6. [Conversation History System](#conversation-history-system)
-7. [Data Management & Persistence](#data-management--persistence)
-8. [Security & Performance Features](#security--performance-features)
-9. [Synopsis & Future Directions](#synopsis--future-directions)
+2. [🆕 Streaming Architecture](#streaming-architecture)
+3. [🆕 Multi-Agent Grading Workflow](#multi-agent-grading-workflow)
+4. [🆕 FormattingAgent](#formattingagent)
+5. [Understanding the Agent System](#understanding-the-agent-system)
+6. [How Agents Work](#how-agents-work)
+7. [Adding New Agents](#adding-new-agents)
+8. [Tools & Utilities You Can Add](#tools--utilities-you-can-add)
+9. [Conversation History System](#conversation-history-system)
+10. [Data Management & Persistence](#data-management--persistence)
+11. [Security & Performance Features](#security--performance-features)
+12. [Synopsis & Future Directions](#synopsis--future-directions)
 
 ---
 
@@ -266,6 +272,299 @@ This architecture provides:
 
 ---
 
+## 🆕 Streaming Architecture
+
+### Real-Time Streaming with `chat_streaming()`
+
+The system now supports **real-time streaming** for immediate user feedback. Instead of waiting for the complete response, users see content as it's generated.
+
+**Key Method:**
+```python
+async def chat_streaming(self, user_input: str, session_id: str = "default"):
+    """Stream responses in real-time with event-based architecture."""
+```
+
+**Example Usage:**
+```python
+import asyncio
+from modules.master_agent import MasterAgent
+
+async def main():
+    agent = MasterAgent()
+    
+    async for event in agent.chat_streaming("Grade this assignment"):
+        if event['type'] == 'status':
+            print(f"[{event['agent']}] {event['content']}")
+        elif event['type'] == 'chunk':
+            print(event['content'], end='', flush=True)
+        elif event['type'] == 'complete':
+            print(f"\n✅ {event['agent']} done!")
+
+asyncio.run(main())
+```
+
+**Event Types:**
+- `status` - Progress updates (e.g., "Classifying request...")
+- `chunk` - Content chunks for real-time display
+- `complete` - Agent completion notification
+- `error` - Error messages
+
+### Streaming Infrastructure Components
+
+**StreamingManager** (`modules/streaming/streaming_manager.py`)
+- Coordinates streaming across multiple agents
+- Manages stream lifecycle (create, update, complete, cleanup)
+- Tracks metrics (chunks, duration, throughput)
+
+**ChunkBuffer** (`modules/streaming/streaming_utils.py`)
+- Efficient chunk buffering with overflow protection
+- Memory-bounded storage (default: 1000 chunks)
+- Fast content retrieval
+
+**StreamingProgressTracker**
+- Real-time progress tracking
+- Per-agent metrics
+- Overall workflow completion percentage
+
+**Example:**
+```python
+from modules.streaming import StreamingManager, StreamingProgressTracker
+
+manager = StreamingManager()
+tracker = StreamingProgressTracker(expected_agents=['grading', 'formatting'])
+
+# Track streaming progress
+stream_id = manager.create_stream(agent_name='grading')
+tracker.start_agent('grading')
+
+# Add chunks
+for chunk in stream:
+    manager.add_chunk(stream_id, chunk)
+    tracker.add_chunk('grading', chunk)
+
+# Complete and get metrics
+tracker.complete_agent('grading')
+metrics = tracker.get_metrics()  # duration, chunks, throughput
+```
+
+### ConversationHistory Streaming Integration
+
+The `ConversationHistory` class now supports streaming:
+
+```python
+# Start streaming message
+history.start_streaming_message('grading', metadata={'user_id': '123'})
+
+# Add chunks as they arrive
+for chunk in stream:
+    history.add_streaming_chunk(chunk)
+
+# Get current accumulated content
+current = history.get_current_streaming_content()
+
+# Finalize and add to history
+history.finalize_streaming_message()
+```
+
+**Benefits:**
+- Streaming chunks are automatically added to conversation history
+- Complete messages stored after streaming finishes
+- Maintains 20-message rolling window
+- Metadata tracks chunk count and streaming status
+
+---
+
+## 🆕 Multi-Agent Grading Workflow
+
+### Automatic Workflow Routing
+
+The system now automatically routes grading requests through a specialized multi-agent pipeline:
+
+```
+User: "Grade this clinical note"
+  ↓
+Master Agent (Classification)
+  ↓
+Grading Workflow Entry
+  ↓
+┌─────────────────┐
+│  Grading Agent  │ → Evaluates against rubric
+└────────┬────────┘
+         ↓
+┌─────────────────┐
+│Formatting Agent │ → Converts to spreadsheet
+└────────┬────────┘
+         ↓
+┌─────────────────┐
+│  Chat Agent     │ → Optional explanatory notes
+│  (Optional)     │
+└────────┬────────┘
+         ↓
+   Final Result (Formatted grading table)
+```
+
+### Workflow Implementation
+
+**Graph Construction** (`modules/master_agent.py`):
+```python
+# Grading workflow nodes (NEW)
+workflow.add_node("grading_workflow_entry", self._grading_workflow_entry)
+workflow.add_node("route_to_grading", self._route_to_grading)
+workflow.add_node("route_to_formatting", self._route_to_formatting)
+workflow.add_node("route_to_chat_notes", self._route_to_chat_notes)
+
+# Conditional routing based on task type
+workflow.add_conditional_edges(
+    "classify_task",
+    self._should_use_grading_workflow,
+    {
+        "grading_workflow": "grading_workflow_entry",
+        "standard_workflow": "route_to_agent",
+        "error": "handle_error"
+    }
+)
+
+# Grading workflow edges
+workflow.add_edge("grading_workflow_entry", "route_to_grading")
+workflow.add_edge("route_to_grading", "route_to_formatting")
+workflow.add_edge("route_to_formatting", "route_to_chat_notes")
+workflow.add_edge("route_to_chat_notes", "manage_data")
+```
+
+### Node Details
+
+**1. `_grading_workflow_entry(state)`**
+- Initializes grading-specific state fields
+- Sets up workflow tracking
+- Prepares state for multi-agent processing
+
+**2. `_route_to_grading(state)`**
+- Executes GradingAgent
+- Stores raw grading results
+- Uses conversation history for context
+
+**3. `_route_to_formatting(state)`**
+- Executes FormattingAgent
+- Converts results to spreadsheet format
+- Generates markdown tables
+
+**4. `_route_to_chat_notes(state)`**
+- Optional additional notes
+- Only runs if user requests explanation
+- Non-critical (continues on error)
+
+### Example Output
+
+**Input:** "Grade this clinical note..."
+
+**Grading Agent Output:**
+```
+Student: John Doe
+Section PS: 8/10 (AI) vs 9/10 (Human)
+Section DX: 7/10 (AI) vs 7/10 (Human)
+...
+```
+
+**Formatting Agent Output:**
+```markdown
+| Section | AI Score | Human Score | Max | Δ |
+|---------|----------|-------------|-----|---|
+| PS      | 8        | 9           | 10  | -1 ⚠️ |
+| DX      | 7        | 7           | 10  | 0 ✅ |
+
+Rubric Items:
+✓ Patient demographics documented
+✓ Chief complaint clearly stated
+✗ Vital signs recorded
+✓ Physical exam findings
+```
+
+---
+
+## 🆕 FormattingAgent
+
+### Purpose
+
+The **FormattingAgent** is a specialized agent that converts raw grading results into professional, spreadsheet-style markdown tables.
+
+**Location:** `modules/agents/formatting_agent.py`
+
+### Key Features
+
+- **Lower Temperature** (0.3) for consistent formatting
+- **Markdown table generation** with proper alignment
+- **Score comparison** (AI vs Human with delta indicators)
+- **Emoji indicators** (✅ ⚠️ ❌) for visual feedback
+- **Rubric item checkboxes** (✓/✗)
+- **Streaming support** via `stream_process()` method
+
+### Implementation
+
+```python
+from modules.agents.formatting_agent import FormattingAgent
+
+# Initialize
+formatter = FormattingAgent()
+
+# Non-streaming usage
+grading_data = {
+    "student": "Jane Doe",
+    "sections": {
+        "PS": {"ai": 8, "human": 9, "max": 10},
+        "DX": {"ai": 7, "human": 7, "max": 10}
+    }
+}
+
+formatted = formatter.format_grading_results(grading_data)
+print(formatted)
+
+# Streaming usage
+async for chunk in formatter.stream_process(grading_data):
+    print(chunk, end='', flush=True)
+```
+
+### System Prompt
+
+The FormattingAgent uses a specialized prompt optimized for:
+- Consistent table formatting
+- Proper markdown syntax
+- Clear visual hierarchy
+- Score alignment and indicators
+- Professional presentation
+
+**Temperature:** 0.3 (lower than other agents for consistency)
+
+### Methods
+
+**`process(grading_results)`**
+- Non-streaming formatting
+- Takes dict or string input
+- Returns formatted markdown
+
+**`stream_process(grading_results, conversation_history=None)`**
+- Async streaming formatting
+- Yields chunks in real-time
+- Supports conversation history
+
+**`format_grading_results(results)`**
+- Alias for `process()` method
+- Clearer semantic naming
+
+### Integration in Workflow
+
+The FormattingAgent automatically processes grading results:
+
+```python
+# Automatic in grading workflow
+async for event in agent.chat_streaming("Grade assignment"):
+    # GradingAgent runs first (evaluation)
+    # FormattingAgent runs second (formatting)
+    # Result: Beautiful formatted table
+    ...
+```
+
+---
+
 ## Understanding the Agent System
 
 ### The MasterAgent: Orchestrator Pattern
@@ -413,9 +712,9 @@ class AnalysisAgent:
 | Feature | ChatAgent | AnalysisAgent | GradingAgent |
 |---------|-----------|---------------|--------------|
 | **Purpose** | General conversation | Data analysis | Educational assessment |
-| **Temperature** | 1.0 (creative) | 1.0 (balanced) | 1.0 (balanced) |
+| **Temperature** | Configurable (default: 1.0) | Configurable (default: 1.0) | Configurable (default: 1.0) |
 | **System Prompt Focus** | Helpful, friendly | Statistical, methodical | Fair, constructive |
-| **Typical Use Cases** | Q&A, explanations | Data processing | Assignment grading |
+| **Typical Use Cases** | Q&A, explanations | Data processing | Assignment grading, clinical notes |
 | **Conversation History** | ✓ Supported | ✓ Supported | ✓ Supported |
 
 ### The LangGraph Workflow in Detail

@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] - 2025-09-30
+## [1.3.0] - 2025-09-30
 
 ### Added - Conversation History Persistence
 
@@ -50,7 +50,7 @@ Agent: Yes, your name is Alice!
 
 ---
 
-## [Unreleased] - 2025-09-30
+## [1.2.0] - 2025-09-30
 
 ### Added - Verbose Mode CLI Option
 
@@ -94,7 +94,7 @@ python main.py --help
 
 ---
 
-## [Unreleased] - 2025-09-30
+## [1.1.0] - 2025-09-30
 
 ### Added - Shared Conversation History
 
