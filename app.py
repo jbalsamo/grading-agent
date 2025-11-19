@@ -11,7 +11,8 @@ import sys
 import json
 import time
 import argparse
-from typing import List, Dict, Any, Optional
+import logging
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
 
@@ -22,6 +23,8 @@ from modules.master_agent import MasterAgent
 from modules.config import config
 from modules.security import InputValidationException, RateLimitException
 from modules.ui.streaming_components import AgentProgressIndicator
+
+logger = logging.getLogger(__name__)
 
 # Parse command-line arguments
 def parse_args():
@@ -417,6 +420,60 @@ def estimate_tokens(text: str) -> int:
         Estimated number of tokens (approximately 4 characters per token)
     """
     return len(text) // 4
+
+
+def _is_grading_request(prompt: str) -> bool:
+    """Heuristic check to see if the user prompt is a grading request.
+
+    This helps decide when to apply student-row filtering to uploaded
+    markdown documents so that non-student lines are ignored for grading.
+    """
+    lowered = prompt.lower()
+    keywords = [
+        "grade ",
+        "grading",
+        "rubric",
+        "student",
+        "scores",
+        "patient note",
+    ]
+    return any(k in lowered for k in keywords)
+
+
+def _extract_valid_student_rows_from_markdown(markdown: str) -> Tuple[str, int, int]:
+    """Return only lines that look like valid student info rows.
+
+    A valid student row is heuristically defined as a line that:
+    - Starts with a name in the form "Last, First"; and
+    - Contains a Diagnosis/Problem #1 marker.
+
+    Args:
+        markdown: Full markdown text from an uploaded document.
+
+    Returns:
+        A tuple of (filtered_markdown, valid_count, skipped_count).
+    """
+    import re
+
+    name_pattern = re.compile(r"^[^,\n]+,\s*[^,\n]+")
+    diag_pattern = re.compile(r"diagnosis/problem\s*#1:", re.IGNORECASE)
+
+    valid_lines: List[str] = []
+    skipped_count = 0
+
+    for raw_line in markdown.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        if name_pattern.search(line) and diag_pattern.search(line):
+            valid_lines.append(line)
+        else:
+            skipped_count += 1
+            logger.info("Skipping non-student markdown line: %s", line[:200])
+
+    filtered = "\n".join(valid_lines)
+    return filtered, len(valid_lines), skipped_count
 
 
 def process_uploaded_file(uploaded_file) -> Optional[str]:
@@ -829,16 +886,41 @@ def render_main_chat():
                 
                 if st.session_state.document_markdown:
                     context = "\n\n**Available Documents:**\n"
+                    is_grading = _is_grading_request(prompt)
+                    
                     for doc in st.session_state.document_markdown:
-                        # Use FULL document content (no truncation)
-                        doc_content = doc['content']
+                        raw_content = doc['content']
+                        doc_content = raw_content
+                        valid_rows = 0
+                        skipped_rows = 0
+
+                        # For grading-style prompts, filter markdown down to valid student rows
+                        if is_grading:
+                            filtered, valid_rows, skipped_rows = _extract_valid_student_rows_from_markdown(raw_content)
+                            if valid_rows > 0:
+                                doc_content = filtered
+                                logger.info(
+                                    "Applied student-row filter to %s: %d valid, %d skipped",
+                                    doc['name'], valid_rows, skipped_rows,
+                                )
+                            else:
+                                # No valid rows detected; fall back to original content
+                                doc_content = raw_content
+                                if skipped_rows > 0:
+                                    logger.info(
+                                        "No valid student rows detected in %s; using original markdown",
+                                        doc['name'],
+                                    )
+
                         context += f"\n### {doc['name']}\n{doc_content}\n"
                         
                         # Track document info for debug logging
                         document_info.append({
                             'name': doc['name'],
                             'content_length': len(doc_content),
-                            'estimated_tokens': estimate_tokens(doc_content)
+                            'estimated_tokens': estimate_tokens(doc_content),
+                            'valid_student_rows': valid_rows,
+                            'skipped_lines': skipped_rows,
                         })
                     
                     document_context = context
@@ -847,7 +929,12 @@ def render_main_chat():
                     if st.session_state.debug_enabled:
                         st.info(f"🔍 **Debug Info:** Including {len(st.session_state.document_markdown)} document(s) in context")
                         for info in document_info:
-                            st.caption(f"📄 {info['name']}: {info['content_length']:,} chars, ~{info['estimated_tokens']:,} tokens")
+                            extra = ""
+                            if _is_grading_request(prompt):
+                                extra = f", valid rows: {info['valid_student_rows']}, skipped: {info['skipped_lines']}"
+                            st.caption(
+                                f"📄 {info['name']}: {info['content_length']:,} chars, ~{info['estimated_tokens']:,} tokens{extra}"
+                            )
                 
                 # Validate input before streaming
                 if document_context:

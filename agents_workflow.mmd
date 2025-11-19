@@ -1,0 +1,71 @@
+flowchart TD
+    %% Entry from UI
+    ST["Streamlit UI (app.py)"] -->|user_input| MA["MasterAgent"]
+
+    %% Master agent components
+    subgraph Orchestration
+        MA --> CH["ConversationHistory (rolling window)"]
+        MA --> IV["InputValidator"]
+        MA --> RL["RateLimiter"]
+        MA --> RC["ResponseCache"]
+        MA --> PM["PerformanceMonitor"]
+        MA --> DM["DataManager"]
+    end
+
+    MA -->|builds & runs| SG["LangGraph StateGraph"]
+
+    %% Core workflow nodes
+    subgraph Workflow
+        CT["classify_task"]
+        RA["route_to_agent"]
+        GW["grading_workflow_entry"]
+        RG["route_to_grading"]
+        RF["route_to_formatting"]
+        RCN["route_to_chat_notes"]
+        MD["manage_data"]
+        SR["synthesize_response"]
+        HE["handle_error"]
+    end
+
+    %% Standard path
+    MA --> CT
+    CT -->|task_classification & agent_type| RA
+    RA -->|non-grading tasks| MD
+
+    %% Grading sub-workflow
+    RA -->|grading task| GW
+    GW --> RG --> RF --> RCN --> MD
+
+    %% Data and response handling
+    MD -->|store interaction & fetch context| DM
+    MD --> SR -->|final text response| MA
+    HE --> SR
+
+    %% Specialized agents
+    subgraph SpecializedAgents
+        CA["ChatAgent"]
+        AA["AnalysisAgent"]
+        GA["GradingAgent"]
+        FA["FormattingAgent"]
+    end
+
+    RA -->|agent_type = chat| CA
+    RA -->|agent_type = analysis| AA
+    RA -->|agent_type = grading| GA
+    RA -->|agent_type = formatting| FA
+
+    %% Grading workflow uses grading & formatting agents
+    RG --> GA
+    RF --> FA
+    RCN --> CA
+
+    %% Shared conversation history (when supported)
+    GA <-->|process_with_history| CH
+    CA <-->|process_with_history| CH
+    AA <-->|process_with_history| CH
+
+    %% Data manager long-term context
+    DM <-->|store & retrieve interactions| MA
+
+    %% Return to UI
+    MA -->|response & metrics| ST
