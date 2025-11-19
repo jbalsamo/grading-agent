@@ -1,8 +1,8 @@
-# Azure OpenAI Master Agent System
+# Grading Helper
 
-> A modular, multi-agent system with StreamLit web interface, document processing, and specialized AI agents with LangGraph
+> A grading-focused StreamLit application built on a modular Azure OpenAI multi-agent system with document processing and specialized AI agents via LangGraph
 
-A sophisticated multi-agent Python application that uses LangGraph and LangChain to manage specialized AI agents and data storage with Azure OpenAI services. Features a modern StreamLit web interface with Google APK-style debugging tools and document upload capabilities.
+Grading Helper is a sophisticated multi-agent Python application centered on clinical and educational grading workflows. It uses LangGraph and LangChain to manage specialized AI agents and data storage with Azure OpenAI services, and exposes them through a modern StreamLit web interface with Google APK-style debugging tools and document upload capabilities.
 
 ## Features
 
@@ -95,12 +95,21 @@ grading-agent/
 
 ## Setup
 
-1. **Install dependencies:**
+1. **Create and activate a virtual environment (recommended for local testing):**
+   ```bash
+   # From the project root
+   python3 -m venv .venv
+   source .venv/bin/activate  # On macOS / Linux
+   # On Windows (PowerShell):
+   #   .venv\\Scripts\\Activate.ps1
+   ```
+
+2. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-2. **Configure environment variables:**
+3. **Configure environment variables:**
    Copy `.env.template` to `.env` and fill in your Azure OpenAI details:
    ```bash
    cp .env.template .env
@@ -139,7 +148,7 @@ grading-agent/
    LANGCHAIN_PROJECT=azure-agent-notebook
    ```
 
-3. **Run the application:**
+4. **Run the application:**
    
    **Option A: StreamLit Web Interface (Recommended)**
    ```bash
@@ -170,9 +179,9 @@ grading-agent/
 
 ## Usage
 
-### StreamLit Web Interface
+### StreamLit Web Interface (Grading Helper)
 
-The StreamLit app provides a modern web interface with:
+The Grading Helper StreamLit app provides a modern web interface with:
 
 **Main Features:**
 - **Document Upload**: Upload PDFs, DOCX, Excel, PowerPoint, and text files
