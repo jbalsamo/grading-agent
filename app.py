@@ -456,7 +456,7 @@ def _extract_valid_student_rows_from_markdown(markdown: str) -> Tuple[str, int, 
     import re
 
     name_pattern = re.compile(r"^[^,\n]+,\s*[^,\n]+")
-    diag_pattern = re.compile(r"diagnosis/problem\s*#1:", re.IGNORECASE)
+    diag_pattern = re.compile(r"diagnosis\s*/?\s*problem\s*#\d+:", re.IGNORECASE)
 
     valid_lines: List[str] = []
     skipped_count = 0
