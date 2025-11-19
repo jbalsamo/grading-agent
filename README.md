@@ -95,12 +95,21 @@ grading-agent/
 
 ## Setup
 
-1. **Install dependencies:**
+1. **Create and activate a virtual environment (recommended for local testing):**
+   ```bash
+   # From the project root
+   python3 -m venv .venv
+   source .venv/bin/activate  # On macOS / Linux
+   # On Windows (PowerShell):
+   #   .venv\\Scripts\\Activate.ps1
+   ```
+
+2. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-2. **Configure environment variables:**
+3. **Configure environment variables:**
    Copy `.env.template` to `.env` and fill in your Azure OpenAI details:
    ```bash
    cp .env.template .env
@@ -139,7 +148,7 @@ grading-agent/
    LANGCHAIN_PROJECT=azure-agent-notebook
    ```
 
-3. **Run the application:**
+4. **Run the application:**
    
    **Option A: StreamLit Web Interface (Recommended)**
    ```bash
