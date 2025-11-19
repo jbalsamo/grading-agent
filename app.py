@@ -1,8 +1,9 @@
 """
-StreamLit Application for Azure OpenAI Master Agent System.
+StreamLit Application for the Grading Helper.
 
-This module provides a web-based interface with Google APK-style debugging tools,
-document upload capabilities, and real-time token tracking.
+This module provides a web-based interface for the Grading Helper, built on the
+Azure OpenAI multi-agent system with Google APK-style debugging tools, document
+upload capabilities, and real-time token tracking.
 """
 
 import streamlit as st
@@ -53,7 +54,7 @@ CLI_ARGS = parse_args()
 
 # Page configuration with dark theme
 st.set_page_config(
-    page_title="Azure OpenAI Master Agent",
+    page_title="Grading Helper",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -542,7 +543,7 @@ def render_sidebar():
     - Debug controls
     """
     with st.sidebar:
-        st.title("🤖 Master Agent System")
+        st.title("📝 Grading Helper")
         
         # Document Upload Section
         st.header("📄 Document Upload")
@@ -847,9 +848,9 @@ def render_main_chat():
     Render the main chat interface.
     
     This function creates the central chat area where users interact with
-    the agent, displaying message history and handling new inputs.
+    the Grading Helper, displaying message history and handling new inputs.
     """
-    st.title("💬 Azure OpenAI Master Agent Chat")
+    st.title("💬 Grading Helper")
     
     # Display chat messages
     for message in st.session_state.messages:

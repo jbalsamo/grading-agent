@@ -1,6 +1,6 @@
-# Clinical Student Grading Guide
+# Clinical Student Grading Guide (Grading Helper)
 
-This guide explains how to use the Grading Agent for clinical student patient note assessment.
+This guide explains how to use the Grading Helper application and its built‑in Grading Agent for clinical student patient note assessment.
 
 ## Overview
 
@@ -42,7 +42,7 @@ To grade clinical students, you need:
 
 ## How to Use
 
-### Via StreamLit Web Interface
+### Via Grading Helper (StreamLit Web App)
 
 1. **Upload Documents**
    ```
@@ -69,7 +69,7 @@ To grade clinical students, you need:
    ```
 
 3. **Review Results**
-   - The agent will generate a report for each student
+   - The Grading Helper will generate a report for each student
    - Compare AI scores vs Human scores
    - Review discrepancies and feedback
 
@@ -186,7 +186,7 @@ Please upload:
 
 ## Support
 
-For issues or questions about the grading agent:
+For issues or questions about the Grading Helper grading workflow:
 1. Check this guide
 2. Review the agent capabilities with the `status` command
 3. Enable debug mode (`-D` flag) to see detailed matching information

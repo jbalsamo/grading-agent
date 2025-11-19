@@ -1,8 +1,8 @@
-# Azure OpenAI Master Agent System
+# Grading Helper
 
-> A modular, multi-agent system with StreamLit web interface, document processing, and specialized AI agents with LangGraph
+> A grading-focused StreamLit application built on a modular Azure OpenAI multi-agent system with document processing and specialized AI agents via LangGraph
 
-A sophisticated multi-agent Python application that uses LangGraph and LangChain to manage specialized AI agents and data storage with Azure OpenAI services. Features a modern StreamLit web interface with Google APK-style debugging tools and document upload capabilities.
+Grading Helper is a sophisticated multi-agent Python application centered on clinical and educational grading workflows. It uses LangGraph and LangChain to manage specialized AI agents and data storage with Azure OpenAI services, and exposes them through a modern StreamLit web interface with Google APK-style debugging tools and document upload capabilities.
 
 ## Features
 
@@ -170,9 +170,9 @@ grading-agent/
 
 ## Usage
 
-### StreamLit Web Interface
+### StreamLit Web Interface (Grading Helper)
 
-The StreamLit app provides a modern web interface with:
+The Grading Helper StreamLit app provides a modern web interface with:
 
 **Main Features:**
 - **Document Upload**: Upload PDFs, DOCX, Excel, PowerPoint, and text files

@@ -1,7 +1,7 @@
 # Grading Report Format
 
 ## Overview
-The grading system now produces professional, structured reports with clear visual hierarchy and total grade calculations.
+The Grading Helper grading system now produces professional, structured reports with clear visual hierarchy and total grade calculations.
 
 ## Report Structure
 
@@ -149,4 +149,4 @@ The formatting uses emoji and markdown to create clear visual hierarchy:
 
 ## Usage
 
-The formatting agent automatically applies this structure when processing grading results. No manual formatting needed - just submit your grading data and receive a professionally formatted report.
+Within Grading Helper, the formatting agent automatically applies this structure when processing grading results. No manual formatting is needed—submit your grading data and the app returns a professionally formatted report.
