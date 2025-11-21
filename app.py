@@ -709,6 +709,44 @@ def export_session_data():
     st.success(f"✅ Session data exported to {export_path}")
 
 
+def render_copy_button(text: str) -> None:
+    """Render a copy-to-clipboard button for the given text.
+    
+    Uses a small HTML/JavaScript snippet (via components.html) to copy the
+    latest formatted output (typically the grading report) to the user's
+    clipboard.
+    """
+    if not text:
+        return
+    import uuid
+    import streamlit.components.v1 as components
+
+    button_id = f"copy-btn-{uuid.uuid4().hex}"
+    # Use json.dumps to safely embed the text as a JS string literal
+    text_js = json.dumps(text)
+    components.html(
+        f"""
+<button id="{button_id}">📋 Copy formatted output</button>
+<script>
+const textToCopy_{button_id.replace('-', '_')} = {text_js};
+const btn_{button_id.replace('-', '_')} = document.getElementById("{button_id}");
+if (btn_{button_id.replace('-', '_')}) {{
+  btn_{button_id.replace('-', '_')}.onclick = async () => {{
+    try {{
+      await navigator.clipboard.writeText(textToCopy_{button_id.replace('-', '_')});
+      console.log('Formatted output copied to clipboard');
+    }} catch (err) {{
+      console.error('Failed to copy formatted output:', err);
+      alert('Failed to copy formatted output to clipboard.');
+    }}
+  }};
+}}
+</script>
+""",
+        height=60,
+    )
+
+
 def stream_agent_response(user_input: str, document_context: str = ""):
     """
     Synchronous generator that yields text chunks from agent streaming response.
@@ -759,19 +797,26 @@ def stream_agent_response(user_input: str, document_context: str = ""):
                         agent_start_time[agent_name] = time.time()
                         current_agent = agent_name
                     
-                    # Show status updates
-                    if st.session_state.debug_enabled:
-                        yield f"\n\n🔄 **{agent_name}**: _{event['content']}_\n\n"
-                        
+                    # Show only selected high-level status messages
+                    content = event.get('content', '')
+                    allowed_statuses = {
+                        'Classifying request...',
+                        'Starting grading workflow...',
+                        'Analyzing with grading agent...',
+                        'Formatting results...'
+                    }
+                    if content in allowed_statuses:
+                        yield f"\n\n🔄 **{agent_name}**: _{content}_\n\n"
+                    
                 elif event_type == 'chunk':
                     yield event['content']
                     
                 elif event_type == 'complete':
-                    # Show completion message in debug mode
-                    if st.session_state.debug_enabled and agent_name in agent_start_time:
+                    # Show concise completion message
+                    if agent_name in agent_start_time:
                         duration = time.time() - agent_start_time[agent_name]
                         yield f"\n\n✅ **{agent_name}** completed ({duration:.1f}s)\n\n"
-                        
+                    
                 elif event_type == 'error':
                     yield f"\n\n❌ Error: {event['content']}\n"
                     
@@ -955,7 +1000,10 @@ def render_main_chat():
                 # Stream the response using Streamlit's write_stream
                 response = st.write_stream(stream_agent_response(prompt, document_context))
                 response_time = time.time() - start_time
-                
+
+                # Render a copy-to-clipboard button for the full formatted response
+                render_copy_button(response)
+
                 # Update tokens
                 response_tokens = estimate_tokens(response)
                 st.session_state.total_tokens += response_tokens

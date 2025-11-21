@@ -883,20 +883,20 @@ class MasterAgent:
                 yield {'type': 'status', 'content': 'Analyzing with grading agent...', 'agent': 'grading'}
                 
                 grading_agent = self.specialized_agents.get('grading')
+                grading_output = ""
                 if grading_agent and hasattr(grading_agent, 'stream_process'):
-                    grading_output = ""
+                    # Consume grading agent stream without emitting directly to user;
+                    # use its output only as input for the formatting agent.
                     async for chunk in grading_agent.stream_process(user_input, self.conversation_history):
                         grading_output += chunk
-                        yield {'type': 'chunk', 'content': chunk, 'agent': 'grading'}
                         self.conversation_history.add_streaming_chunk(chunk)
                     
                     yield {'type': 'complete', 'content': '', 'agent': 'grading'}
                 else:
                     # Fallback to non-streaming
                     grading_output = grading_agent.process_with_history(user_input, self.conversation_history)
-                    yield {'type': 'chunk', 'content': grading_output, 'agent': 'grading'}
                 
-                # 6b: Formatting Agent
+                # 6b: Formatting Agent (only this agent's output is shown to the user)
                 yield {'type': 'status', 'content': 'Formatting results...', 'agent': 'formatting'}
                 
                 formatting_agent = self.specialized_agents.get('formatting')
