@@ -33,9 +33,10 @@ class TestInputValidation:
     
     def test_validate_too_long_input(self):
         """Test validation rejects too long input."""
+        from modules.config import config
         validator = InputValidator()
-        # Create input longer than max length
-        long_input = "a" * 10001
+        # Create input longer than max length (default is 500000)
+        long_input = "a" * (config.max_input_length + 1)
         result = validator.validate_input(long_input)
         assert result["valid"] is False
         assert "too long" in result["error"].lower()

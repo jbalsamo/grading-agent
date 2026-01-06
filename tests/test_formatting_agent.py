@@ -67,8 +67,8 @@ class TestFormattingAgentInitialization:
         assert "capabilities" in caps
         assert isinstance(caps["capabilities"], list)
         assert len(caps["capabilities"]) > 0
-        assert caps["temperature"] == 0.3
-        assert "Grading result formatting" in caps["capabilities"]
+        assert caps["temperature"] == "default"
+        assert "Convert grading data to markdown tables" in caps["capabilities"]
 
 
 class TestFormattingAgentProcessing:

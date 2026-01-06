@@ -1,16 +1,30 @@
 {
-  "uptime_seconds": 107.8,
-  "total_requests": 1,
+  "uptime_seconds": 1391.35,
+  "total_requests": 60,
   "total_errors": 0,
   "overall_error_rate": 0.0,
   "agents": {
     "chat": {
-      "request_count": 1,
-      "average_duration": 70.513,
+      "request_count": 47,
+      "average_duration": 11.043,
       "error_count": 0,
       "error_rate": 0.0,
-      "last_called": "2025-10-01T17:38:48.074819"
+      "last_called": "2026-01-06T11:23:38.311707"
+    },
+    "analysis": {
+      "request_count": 7,
+      "average_duration": 15.516,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "last_called": "2026-01-06T11:16:17.753387"
+    },
+    "grading": {
+      "request_count": 6,
+      "average_duration": 31.317,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "last_called": "2026-01-06T11:22:51.488563"
     }
   },
-  "timestamp": "2025-10-01T17:39:25.180638"
+  "timestamp": "2026-01-06T11:23:38.312842"
 }

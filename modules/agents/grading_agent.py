@@ -34,7 +34,14 @@ class GradingAgent:
             system_message = """You are grading clinical student patient notes.
 
 The rubric items and their text are derived exactly from the rubric PDF.
-Exclusions: "NONE OF THE ABOVE" and "COMMENTS" are not scored or included in totals.
+Exclusions: "NONE OF THE ABOVE", "NO APPROPRIATE" items, and "COMMENTS" are not scored or included in totals.
+
+CRITICAL - Rubric Item Counting:
+- Each LINE in the rubric PDF = 1 point, even if the line contains commas.
+- Example: "MRI/CT scan of the spine, x-ray of back" = 1 item (1 point), NOT 2 items.
+- Example: "Counsel patient on importance of adherence to diet-diabetic, lower sweet intake, low fat diet" = 1 item.
+- DO NOT split rubric items on commas. Match the EXACT structure from the rubric PDF.
+- Count the actual number of rubric lines in the PDF to determine max points per section.
 
 Matching & Scoring Logic:
 - Use semantic and simile-aware matching (not just keyword or literal).
@@ -91,7 +98,14 @@ Always be fair, objective, and constructive in your assessments. Provide specifi
             system_message = """You are grading clinical student patient notes.
 
 The rubric items and their text are derived exactly from the rubric PDF.
-Exclusions: "NONE OF THE ABOVE" and "COMMENTS" are not scored or included in totals.
+Exclusions: "NONE OF THE ABOVE", "NO APPROPRIATE" items, and "COMMENTS" are not scored or included in totals.
+
+CRITICAL - Rubric Item Counting:
+- Each LINE in the rubric PDF = 1 point, even if the line contains commas.
+- Example: "MRI/CT scan of the spine, x-ray of back" = 1 item (1 point), NOT 2 items.
+- Example: "Counsel patient on importance of adherence to diet-diabetic, lower sweet intake, low fat diet" = 1 item.
+- DO NOT split rubric items on commas. Match the EXACT structure from the rubric PDF.
+- Count the actual number of rubric lines in the PDF to determine max points per section.
 
 Matching & Scoring Logic:
 - Use semantic and simile-aware matching (not just keyword or literal).
@@ -169,7 +183,14 @@ Always be fair, objective, and constructive in your assessments. Provide specifi
             system_message = """You are grading clinical student patient notes.
 
 The rubric items and their text are derived exactly from the rubric PDF.
-Exclusions: "NONE OF THE ABOVE" and "COMMENTS" are not scored or included in totals.
+Exclusions: "NONE OF THE ABOVE", "NO APPROPRIATE" items, and "COMMENTS" are not scored or included in totals.
+
+CRITICAL - Rubric Item Counting:
+- Each LINE in the rubric PDF = 1 point, even if the line contains commas.
+- Example: "MRI/CT scan of the spine, x-ray of back" = 1 item (1 point), NOT 2 items.
+- Example: "Counsel patient on importance of adherence to diet-diabetic, lower sweet intake, low fat diet" = 1 item.
+- DO NOT split rubric items on commas. Match the EXACT structure from the rubric PDF.
+- Count the actual number of rubric lines in the PDF to determine max points per section.
 
 Matching & Scoring Logic:
 - Use semantic and simile-aware matching (not just keyword or literal).

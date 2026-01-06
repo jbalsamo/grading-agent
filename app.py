@@ -13,6 +13,7 @@ import json
 import time
 import argparse
 import logging
+import re
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
@@ -477,6 +478,66 @@ def _extract_valid_student_rows_from_markdown(markdown: str) -> Tuple[str, int, 
     return filtered, len(valid_lines), skipped_count
 
 
+def fix_checkbox_splits(md: str) -> str:
+    """
+    Fix lines that were incorrectly split by commas during MarkItDown conversion.
+    
+    MarkItDown does not currently expose a "don't split on commas" switch, so this
+    post-processor re-joins lines that were split.
+    
+    Handles:
+    - Unchecked checkboxes: - [ ]
+    - Checked checkboxes: - [x] or - [X]
+    - Plain bullets: - item
+    - Plain text lines ending with comma
+    
+    Example:
+        Input:  "- [ ] Diabetes,\\n- [ ] Type 2"
+        Output: "- [ ] Diabetes, Type 2"
+        
+        Input:  "- [x] Radiology,\\n- [x] MRI and x-ray"
+        Output: "- [x] Radiology, MRI and x-ray"
+        
+        Input:  "- Radiology,\\n- MRI and x-ray"
+        Output: "- Radiology, MRI and x-ray"
+    
+    Args:
+        md: Markdown string with potentially split lines
+        
+    Returns:
+        Markdown string with lines properly joined
+    """
+    # Pattern for unchecked checkboxes: - [ ] item, \n - [ ] continuation
+    unchecked_pattern = re.compile(
+        r"(- \[ \] .+?,)\n(- \[ \] )(.+)",
+        re.MULTILINE
+    )
+    
+    # Pattern for checked checkboxes: - [x] item, \n - [x] continuation
+    checked_pattern = re.compile(
+        r"(- \[[xX]\] .+?,)\n(- \[[xX]\] )(.+)",
+        re.MULTILINE
+    )
+    
+    # Pattern for plain bullets: - item, \n - continuation
+    bullet_pattern = re.compile(
+        r"(- (?!\[[ xX]\]).*?,)\n(- (?!\[[ xX]\]))(.+)",
+        re.MULTILINE
+    )
+    
+    prev_md = None
+    while prev_md != md:
+        prev_md = md
+        # Fix unchecked checkboxes
+        md = unchecked_pattern.sub(r"\1 \3", md)
+        # Fix checked checkboxes
+        md = checked_pattern.sub(r"\1 \3", md)
+        # Fix plain bullets
+        md = bullet_pattern.sub(r"\1 \3", md)
+    
+    return md
+
+
 def process_uploaded_file(uploaded_file) -> Optional[str]:
     """
     Process an uploaded file and convert it to markdown.
@@ -506,7 +567,10 @@ def process_uploaded_file(uploaded_file) -> Optional[str]:
         # Clean up temp file
         temp_path.unlink()
         
-        return result.text_content
+        # Post-process to fix checkbox lines split by commas
+        clean_md = fix_checkbox_splits(result.text_content)
+        
+        return clean_md
         
     except Exception as e:
         st.error(f"Error converting {uploaded_file.name}: {e}")
@@ -619,9 +683,12 @@ def render_sidebar():
             if st.button("🗑️ Clear All Documents"):
                 st.session_state.uploaded_documents = []
                 st.session_state.document_markdown = []
-                st.session_state.total_tokens = estimate_tokens(
-                    ' '.join([m['content'] for m in st.session_state.messages])
-                )
+                # Also clear conversation history to prevent context pollution between patient cases
+                st.session_state.messages = []
+                if st.session_state.agent:
+                    st.session_state.agent.clear_conversation_history()
+                st.session_state.total_tokens = 0
+                st.success("✅ Documents and conversation history cleared")
                 st.rerun()
         
         st.divider()
@@ -1000,6 +1067,9 @@ def render_main_chat():
                 # Stream the response using Streamlit's write_stream
                 response = st.write_stream(stream_agent_response(prompt, document_context))
                 response_time = time.time() - start_time
+                
+                # Post-process response to fix checkbox splits from grading output
+                response = fix_checkbox_splits(response)
 
                 # Render a copy-to-clipboard button for the full formatted response
                 render_copy_button(response)

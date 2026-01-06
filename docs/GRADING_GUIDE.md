@@ -8,6 +8,13 @@ The Grading Agent is specifically designed to grade clinical student patient not
 
 ## System Capabilities
 
+### Rubric Item Counting (CRITICAL)
+- Each **LINE** in the rubric PDF = 1 point, even if the line contains commas
+- Example: `"MRI/CT scan of the spine, x-ray of back"` = **1 item** (1 point), NOT 2 items
+- Example: `"Counsel patient on adherence to diet-diabetic, lower sweet intake, low fat diet"` = **1 item**
+- The system does NOT split rubric items on commas - it matches the exact structure from the rubric PDF
+- Exclusions: "NONE OF THE ABOVE", "NO APPROPRIATE" items, and "COMMENTS" are not scored
+
 ### Scoring Algorithm
 - **Semantic Matching**: Understands meaning, not just keywords
 - **Simile-Aware**: Recognizes equivalent phrases (e.g., "shooting pain" ≈ "pain radiates down leg")
