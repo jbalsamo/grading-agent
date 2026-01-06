@@ -17,10 +17,11 @@ class TestMasterAgentIntegration:
         """Test that master agent initializes correctly."""
         assert master_agent is not None
         assert master_agent.specialized_agents is not None
-        assert len(master_agent.specialized_agents) == 3
+        assert len(master_agent.specialized_agents) == 4
         assert 'chat' in master_agent.specialized_agents
         assert 'analysis' in master_agent.specialized_agents
         assert 'grading' in master_agent.specialized_agents
+        assert 'formatting' in master_agent.specialized_agents
     
     def test_chat_with_context(self, master_agent):
         """Test chat maintains context across messages."""
@@ -120,7 +121,7 @@ class TestSystemFeatures:
         status = master_agent.get_agent_status()
         assert status['master_agent'] == 'active'
         assert status['data_manager'] == 'active'
-        assert len(status['specialized_agents']) == 3
+        assert len(status['specialized_agents']) == 4
     
     def test_get_performance_stats(self, master_agent):
         """Test getting performance statistics."""
